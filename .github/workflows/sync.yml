@@ -1,0 +1,38 @@
+name: Sync Prem Picks Data
+
+# Runs automatically on a schedule, and can also be triggered by hand
+# from the Actions tab in GitHub (useful right after a Saturday 3pm
+# kickoff if you don't want to wait for the next scheduled run).
+on:
+  schedule:
+    # Every 2 hours, all year round. Cron times are UTC. Adjust the
+    # frequency if you want it tighter around matchdays -- e.g. an
+    # extra run or two on Saturday/Sunday evenings.
+    - cron: '0 */2 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests firebase-admin
+
+      - name: Write Firebase service account key
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
+
+      - name: Advance gameweek if needed
+        run: python advance_gameweek.py
+
+      - name: Pull results and detect forfeits
+        run: python pull_results.py

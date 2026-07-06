@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prem Picks 26/27</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Literata:opsz,wght@6..72,400;6..72,500;6..72,600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEAD8;
+    --paper-2:#E6E0CB;
+    --ink:#16201C;
+    --pitch:#1F5C3F;
+    --pitch-dark:#123B28;
+    --gold:#C7A34C;
+    --line:#CFC7AC;
+    --muted:#726C58;
+    --red:#A9382C;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Literata', serif;
+    line-height:1.5;
+  }
+  .display{
+    font-family:'Bebas Neue', sans-serif;
+    letter-spacing:0.03em;
+  }
+  .mono{
+    font-family:'JetBrains Mono', monospace;
+  }
+  header.hero{
+    background:var(--pitch);
+    color:var(--paper);
+    padding:2.2rem 1.5rem 1.6rem;
+    position:relative;
+    overflow:hidden;
+    border-bottom:4px solid var(--gold);
+  }
+  header.hero::after{
+    content:"";
+    position:absolute;
+    right:-60px; top:-60px;
+    width:220px; height:220px;
+    border:2px solid rgba(239,234,216,0.15);
+    border-radius:50%;
+  }
+  header.hero::before{
+    content:"";
+    position:absolute;
+    left:-30%; right:-30%; top:50%;
+    height:2px;
+    background:rgba(239,234,216,0.12);
+  }
+  .hero-inner{ position:relative; z-index:1; max-width:760px; margin:0 auto; }
+  h1.display{
+    font-size:clamp(2.4rem, 6vw, 3.4rem);
+    margin:0;
+    line-height:0.95;
+  }
+  .hero-sub{
+    margin-top:0.4rem;
+    font-size:0.8rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--gold);
+  }
+  main{
+    max-width:760px;
+    margin:0 auto;
+    padding:1.5rem 1.5rem 4rem;
+  }
+  .card{
+    background:#fff8ea;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:1.4rem;
+    margin-bottom:1.5rem;
+    box-shadow:0 1px 0 var(--line);
+  }
+  .card h2{
+    font-family:'Bebas Neue', sans-serif;
+    letter-spacing:0.02em;
+    font-size:1.5rem;
+    margin:0 0 0.9rem;
+    color:var(--pitch-dark);
+    border-bottom:2px solid var(--paper-2);
+    padding-bottom:0.5rem;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.7rem;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    color:var(--muted);
+  }
+  button, .btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.85rem;
+    border:1px solid var(--ink);
+    background:var(--ink);
+    color:var(--paper);
+    padding:0.65rem 1.1rem;
+    border-radius:6px;
+    cursor:pointer;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+  button:hover{ background:var(--pitch-dark); border-color:var(--pitch-dark); }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+  button.ghost{
+    background:transparent;
+    color:var(--ink);
+  }
+  #signin-gate{ text-align:center; padding:3rem 1.5rem; }
+  #signin-gate p{ color:var(--muted); max-width:40ch; margin:0.8rem auto 1.4rem; }
+  .team-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(140px,1fr));
+    gap:0.6rem;
+  }
+  .team-chip{
+    border:1px solid var(--line);
+    background:var(--paper);
+    border-radius:8px;
+    padding:0.6rem 0.7rem;
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.78rem;
+    text-align:left;
+    cursor:pointer;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .team-chip:hover{ border-color:var(--pitch); }
+  .team-chip.selected{
+    background:var(--pitch);
+    border-color:var(--pitch);
+    color:var(--paper);
+  }
+  .team-chip.locked{
+    opacity:0.35;
+    cursor:not-allowed;
+    text-decoration:line-through;
+  }
+  .lock-note{ font-size:0.65rem; color:var(--red); }
+  .status-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:0.6rem 1.2rem;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:1.4rem;
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.78rem;
+    color:var(--muted);
+  }
+  .badge{
+    display:inline-block;
+    background:var(--gold);
+    color:var(--pitch-dark);
+    padding:0.15rem 0.55rem;
+    border-radius:20px;
+    font-weight:700;
+  }
+  table{ width:100%; border-collapse:collapse; font-family:'JetBrains Mono', monospace; font-size:0.82rem; }
+  th, td{ text-align:left; padding:0.45rem 0.4rem; border-bottom:1px solid var(--paper-2); }
+  th{ text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em; color:var(--muted); }
+  tr.me{ background:rgba(31,92,63,0.08); }
+  .rank{ color:var(--muted); width:2ch; }
+  .bonus-tag{
+    font-size:0.65rem;
+    background:var(--gold);
+    color:var(--pitch-dark);
+    padding:0.1rem 0.4rem;
+    border-radius:10px;
+    margin-left:0.4rem;
+  }
+  .pick-tile{
+    display:flex;
+    align-items:center;
+    gap:0.7rem;
+    padding:0.5rem 0;
+    border-bottom:1px dashed var(--paper-2);
+  }
+  .pick-num{
+    font-family:'Bebas Neue', sans-serif;
+    font-size:1.6rem;
+    color:var(--gold);
+    -webkit-text-stroke:1px var(--pitch-dark);
+    width:2.4rem;
+    text-align:center;
+  }
+  .empty{ color:var(--muted); font-size:0.85rem; font-style:italic; }
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:0.72rem;
+    padding:2rem 1rem;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .msg{
+    font-size:0.8rem;
+    margin-top:0.7rem;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .msg.error{ color:var(--red); }
+  .msg.ok{ color:var(--pitch-dark); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-sub">Season 2026/27 &middot; Friends League</div>
+    <h1 class="display">PREM PICKS</h1>
+  </div>
+</header>
+
+<main>
+
+  <div id="signin-gate">
+    <p class="eyebrow">Team sheet locked</p>
+    <p>Sign in with Google to pick your team for this gameweek. One team per week, changeable anytime up to kickoff — no repeats until the reshuffle at gameweek 20.</p>
+    <button id="signin-btn">Sign in with Google</button>
+  </div>
+
+  <div id="app" style="display:none;">
+
+    <div class="status-row">
+      <div id="whoami"></div>
+      <div>
+        <span class="badge" id="gw-badge">GW –</span>
+        <span id="deadline-text"></span>
+      </div>
+      <button class="ghost" id="signout-btn">Sign out</button>
+    </div>
+
+    <div class="card" id="pick-card">
+      <h2>Your Pick</h2>
+      <p class="eyebrow" id="pick-status"></p>
+      <div class="team-grid" id="team-grid"></div>
+      <div class="msg" id="pick-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Teams You've Got Left</h2>
+      <div id="remaining-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>This Gameweek's Sheet</h2>
+      <div id="sheet-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>League Table</h2>
+      <table>
+        <thead>
+          <tr><th></th><th>Player</th><th>Points</th></tr>
+        </thead>
+        <tbody id="leaderboard-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card" id="admin-card" style="display:none; border-color:var(--gold);">
+      <h2>Admin &mdash; Manual Result Override</h2>
+      <p class="eyebrow">Use this if the auto-pull script is broken or a result needs correcting. Manual entries are never overwritten by the automated script.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:end; margin-top:0.8rem;">
+        <div>
+          <label class="eyebrow" for="admin-gw">Gameweek</label><br/>
+          <input type="number" id="admin-gw" min="1" max="38" style="padding:0.5rem; font-family:'JetBrains Mono',monospace; width:6rem;" />
+        </div>
+        <div>
+          <label class="eyebrow" for="admin-team">Team</label><br/>
+          <select id="admin-team" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;"></select>
+        </div>
+        <div>
+          <label class="eyebrow" for="admin-result">Result</label><br/>
+          <select id="admin-result" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;">
+            <option value="win">Win</option>
+            <option value="draw">Draw</option>
+            <option value="loss">Loss</option>
+            <option value="forfeit">Forfeit (didn't play)</option>
+          </select>
+        </div>
+        <div>
+          <label class="eyebrow" style="display:block;">
+            <input type="checkbox" id="admin-append" style="vertical-align:middle;" />
+            Double gameweek — add as extra fixture
+          </label>
+        </div>
+        <button id="admin-submit">Save Result</button>
+      </div>
+      <div class="msg" id="admin-msg"></div>
+      <p class="eyebrow" style="margin-top:1rem;">Recent manual overrides</p>
+      <div id="admin-recent"></div>
+    </div>
+
+  </div>
+
+</main>
+
+<footer>Prem Picks &middot; built for the group, not for the bookies.</footer>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  // (setDoc is reused for the admin override writes below)
+
+  // ----------------------------------------------------------------
+  // 1. PASTE YOUR FIREBASE CONFIG HERE (see SETUP.md)
+  // ----------------------------------------------------------------
+  const firebaseConfig = {
+    apiKey: "AIzaSyDT4p-B4V4veqPteUC8uxjrGBJcea2FgVA",
+    authDomain: "pl-predictions-sv.firebaseapp.com",
+    projectId: "pl-predictions-sv",
+    storageBucket: "pl-predictions-sv.firebasestorage.app",
+    messagingSenderId: "610117601524",
+    appId: "1:610117601524:web:1919f552a6d91e20acb6a1",
+    measurementId: "G-W0ZBJHPJ7F",
+    ADMIN_EMAIL: "sam.vinall@hotmail.co.uk"
+  };
+
+  // ----------------------------------------------------------------
+  // 2. GAME CONFIG — edit these to match your rules
+  // ----------------------------------------------------------------
+  const UNLOCK_GAMEWEEK = 20;      // teams become repickable from this gameweek
+  const UNIQUE_THRESHOLD = 1;      // "picked by <= this many people" gets the bonus. Use 2 for "no one else, or 1 other"
+  const BONUS_MULTIPLIER = 2;
+  const WIN_POINTS = 1;
+
+  // Must exactly match the email in the isAdmin() function in firestore.rules
+  const ADMIN_EMAIL = "YOUR_ADMIN_EMAIL@gmail.com";
+
+  const TEAMS = [
+    "Arsenal","Aston Villa","Bournemouth","Brentford","Brighton","Chelsea",
+    "Coventry City","Crystal Palace","Everton","Fulham","Hull City",
+    "Ipswich Town","Leeds United","Liverpool","Manchester City",
+    "Manchester United","Newcastle United","Nottingham Forest",
+    "Sunderland","Tottenham Hotspur"
+  ];
+
+  // ----------------------------------------------------------------
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  let currentUser = null;
+  let currentConfig = null; // { gameweek, deadline }
+
+  document.getElementById("signin-btn").onclick = () => signInWithPopup(auth, provider).catch(e => alert(e.message));
+  document.getElementById("signout-btn").onclick = () => signOut(auth);
+
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = user;
+    if (user) {
+      document.getElementById("signin-gate").style.display = "none";
+      document.getElementById("app").style.display = "block";
+      document.getElementById("whoami").textContent = `Signed in as ${user.displayName} (${user.email})`;
+
+      if (user.email === ADMIN_EMAIL) {
+        document.getElementById("admin-card").style.display = "block";
+        setupAdminPanel();
+      }
+
+      await loadEverything();
+    } else {
+      document.getElementById("signin-gate").style.display = "block";
+      document.getElementById("app").style.display = "none";
+    }
+  });
+
+  async function loadEverything() {
+    const configSnap = await getDoc(doc(db, "config", "current"));
+    if (!configSnap.exists()) {
+      document.getElementById("pick-status").textContent = "No gameweek open yet — check back once the admin sets one.";
+      return;
+    }
+    currentConfig = configSnap.data(); // { gameweek: number, deadline: Timestamp }
+    const deadlineDate = currentConfig.deadline.toDate();
+    const now = new Date();
+    const isOpen = now < deadlineDate;
+
+    document.getElementById("gw-badge").textContent = `GW ${currentConfig.gameweek}`;
+    document.getElementById("deadline-text").textContent = isOpen
+      ? `Locks ${deadlineDate.toLocaleString()}`
+      : `Locked since ${deadlineDate.toLocaleString()}`;
+
+    const allPicksSnap = await getDocs(collection(db, "picks"));
+    const allPicks = allPicksSnap.docs.map(d => d.data());
+
+    const resultsSnap = await getDocs(collection(db, "results"));
+    const results = {}; // key -> array of outcomes, e.g. ["win"] or ["win","loss"]
+    const resultsDocs = [];
+    resultsSnap.docs.forEach(d => {
+      const r = d.data();
+      results[`${r.gameweek}_${r.team}`] = r.results || [];
+      resultsDocs.push(r);
+    });
+    if (currentUser.email === ADMIN_EMAIL) renderAdminRecent(resultsDocs);
+
+    const myPicks = allPicks.filter(p => p.uid === currentUser.uid);
+    // A team only stays "used" if the pick actually resolved to a real
+    // match (win/draw/loss). If it came back as a forfeit (the picked
+    // team didn't end up playing that gameweek), the team is freed up
+    // again immediately rather than being wasted.
+    const myTeamsUsedSinceUnlock = new Set(
+      myPicks
+        .filter(p => p.gameweek < UNLOCK_GAMEWEEK && !(results[`${p.gameweek}_${p.team}`] || []).includes("forfeit"))
+        .map(p => p.team)
+    );
+    const myPickThisWeek = myPicks.find(p => p.gameweek === currentConfig.gameweek);
+
+    renderPickPanel(isOpen, myPickThisWeek, myTeamsUsedSinceUnlock);
+    renderRemainingTeams(myTeamsUsedSinceUnlock);
+    renderSheet(allPicks.filter(p => p.gameweek === currentConfig.gameweek), isOpen);
+    renderLeaderboard(allPicks, results);
+  }
+
+  function renderPickPanel(isOpen, myPickThisWeek, usedTeams) {
+    const grid = document.getElementById("team-grid");
+    const statusEl = document.getElementById("pick-status");
+    grid.innerHTML = "";
+
+    if (myPickThisWeek) {
+      statusEl.textContent = isOpen
+        ? `Current pick: ${myPickThisWeek.team} for GW${currentConfig.gameweek} — you can still change this until kickoff.`
+        : `Locked in: ${myPickThisWeek.team} for GW${currentConfig.gameweek}`;
+    } else if (!isOpen) {
+      statusEl.textContent = "Picking window has closed for this gameweek.";
+    } else {
+      statusEl.textContent = "Choose a team below. You can change your mind anytime before kickoff of the first match.";
+    }
+
+    TEAMS.forEach(team => {
+      const locked = currentConfig.gameweek < UNLOCK_GAMEWEEK && usedTeams.has(team);
+      const chip = document.createElement("button");
+      chip.className = "team-chip" + (locked ? " locked" : "") + (myPickThisWeek?.team === team ? " selected" : "");
+      chip.innerHTML = `<span>${team}</span>` + (locked ? `<span class="lock-note">used</span>` : "");
+      chip.disabled = locked || !isOpen;
+      chip.onclick = () => submitPick(team);
+      grid.appendChild(chip);
+    });
+  }
+
+  function renderRemainingTeams(usedTeams) {
+    const el = document.getElementById("remaining-list");
+    if (!el) return;
+    if (currentConfig.gameweek >= UNLOCK_GAMEWEEK) {
+      el.innerHTML = `<p class="empty">All teams are available again from GW${UNLOCK_GAMEWEEK} onward.</p>`;
+      return;
+    }
+    const remaining = TEAMS.filter(t => !usedTeams.has(t));
+    if (remaining.length === TEAMS.length) {
+      el.innerHTML = `<p class="empty">You haven't used any teams yet.</p>`;
+      return;
+    }
+    el.innerHTML = `<p class="mono" style="font-size:0.82rem;">${remaining.join(", ")}</p>`;
+  }
+
+  async function submitPick(team) {
+    const msg = document.getElementById("pick-msg");
+    msg.textContent = "Submitting...";
+    msg.className = "msg";
+    const pickId = `${currentUser.uid}_gw${currentConfig.gameweek}`;
+    try {
+      await setDoc(doc(db, "picks", pickId), {
+        uid: currentUser.uid,
+        name: currentUser.displayName,
+        email: currentUser.email,
+        team,
+        gameweek: currentConfig.gameweek,
+      });
+      msg.textContent = `Pick submitted: ${team}`;
+      msg.className = "msg ok";
+      await loadEverything();
+    } catch (e) {
+      msg.textContent = `Couldn't submit: ${e.message}`;
+      msg.className = "msg error";
+    }
+  }
+
+  function renderSheet(weekPicks, isOpen) {
+    const el = document.getElementById("sheet-list");
+    el.innerHTML = "";
+    if (isOpen) {
+      el.innerHTML = `<p class="empty">Picks stay hidden from each other until the gameweek locks.</p>`;
+      return;
+    }
+    if (weekPicks.length === 0) {
+      el.innerHTML = `<p class="empty">No picks recorded for this gameweek yet.</p>`;
+      return;
+    }
+    weekPicks.forEach((p, i) => {
+      const row = document.createElement("div");
+      row.className = "pick-tile";
+      row.innerHTML = `<span class="pick-num">${i + 1}</span><span>${p.name} &mdash; <strong>${p.team}</strong></span>`;
+      el.appendChild(row);
+    });
+  }
+
+  function setupAdminPanel() {
+    const teamSelect = document.getElementById("admin-team");
+    teamSelect.innerHTML = TEAMS.map(t => `<option value="${t}">${t}</option>`).join("");
+
+    document.getElementById("admin-submit").onclick = async () => {
+      const msg = document.getElementById("admin-msg");
+      const gw = parseInt(document.getElementById("admin-gw").value, 10);
+      const team = teamSelect.value;
+      const result = document.getElementById("admin-result").value;
+      const append = document.getElementById("admin-append").checked;
+
+      if (!gw) {
+        msg.textContent = "Enter a gameweek number.";
+        msg.className = "msg error";
+        return;
+      }
+
+      const docId = `gw${gw}_${team.replace(/\s+/g, "_")}`;
+      try {
+        let resultsArr = [result];
+        if (append) {
+          const existing = await getDoc(doc(db, "results", docId));
+          if (existing.exists() && existing.data().source === "manual") {
+            resultsArr = [...(existing.data().results || []), result];
+          }
+          // if it doesn't exist yet, or was API-sourced, "append" just
+          // starts a fresh manual array with this one entry
+        }
+        // source: "manual" marks this so pull_results.py will never
+        // silently overwrite it on a later automated run.
+        await setDoc(doc(db, "results", docId), {
+          gameweek: gw, team, results: resultsArr, source: "manual",
+        });
+        msg.textContent = `Saved: GW${gw} ${team} → [${resultsArr.join(", ")}]`;
+        msg.className = "msg ok";
+        document.getElementById("admin-gw").value = "";
+        document.getElementById("admin-append").checked = false;
+        await loadEverything();
+      } catch (e) {
+        msg.textContent = `Couldn't save: ${e.message}`;
+        msg.className = "msg error";
+      }
+    };
+  }
+
+  function renderAdminRecent(resultsDocs) {
+    const el = document.getElementById("admin-recent");
+    if (!el) return;
+    const manual = resultsDocs.filter(r => r.source === "manual");
+    if (manual.length === 0) {
+      el.innerHTML = `<p class="empty">No manual overrides yet.</p>`;
+      return;
+    }
+    el.innerHTML = manual
+      .sort((a, b) => b.gameweek - a.gameweek)
+      .map(r => `<div class="pick-tile"><span class="mono" style="font-size:0.78rem;">GW${r.gameweek} — ${r.team} — [${(r.results || []).join(", ")}]</span></div>`)
+      .join("");
+  }
+
+  function renderLeaderboard(allPicks, results) {
+    const popularity = {};
+    allPicks.forEach(p => {
+      const key = `${p.gameweek}_${p.team}`;
+      popularity[key] = (popularity[key] || 0) + 1;
+    });
+
+    const totals = {}; // email -> {name, points}
+    allPicks.forEach(p => {
+      const key = `${p.gameweek}_${p.team}`;
+      const outcomes = results[key] || [];
+      // Per-win scoring: a double gameweek where the team wins both
+      // fixtures scores twice. A single normal win scores once. Draws,
+      // losses, and forfeits score nothing.
+      const wins = outcomes.filter(o => o === "win").length;
+      let pts = wins * WIN_POINTS;
+      if (pts > 0 && popularity[key] <= UNIQUE_THRESHOLD) pts *= BONUS_MULTIPLIER;
+
+      if (!totals[p.email]) totals[p.email] = { name: p.name, points: 0 };
+      totals[p.email].points += pts;
+    });
+
+    const rows = Object.entries(totals)
+      .map(([email, v]) => ({ email, ...v }))
+      .sort((a, b) => b.points - a.points);
+
+    const body = document.getElementById("leaderboard-body");
+    body.innerHTML = "";
+    if (rows.length === 0) {
+      body.innerHTML = `<tr><td colspan="3" class="empty">No scored picks yet.</td></tr>`;
+      return;
+    }
+    rows.forEach((r, i) => {
+      const tr = document.createElement("tr");
+      if (currentUser && r.email === currentUser.email) tr.className = "me";
+      tr.innerHTML = `<td class="rank">${i + 1}</td><td>${r.name}</td><td>${r.points}</td>`;
+      body.appendChild(tr);
+    });
+  }
+</script>
+
+</body>
+</html>

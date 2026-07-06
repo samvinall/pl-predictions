@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ⚠️ CHANGE THIS to your own email — only this account can set
+    // gameweeks/deadlines and enter match results.
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == "sam.vinall@hotmail.co.uk";
+    }
+
+    // config/current holds { gameweek: number, deadline: timestamp }
+    // You update this once a week in the Firebase console before picks open.
+    match /config/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // results/{gw_team} holds { gameweek, team, result: "win"|"draw"|"loss" }
+    // Only you can enter these, and only from the real match outcome.
+    match /results/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // picks/{uid_gwN} holds { uid, name, email, team, gameweek }
+    match /picks/{pickId} {
+      allow read: if isSignedIn();
+
+      // A pick can be created OR changed (up until the deadline), only by
+      // the account it belongs to, only for the currently open gameweek,
+      // and only before that gameweek's deadline. `resource` is null on
+      // create and the existing doc on update, so the ownership check
+      // covers both cases -- nobody can overwrite someone else's pick.
+      allow create, update: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && (resource == null || resource.data.uid == request.auth.uid)
+        && request.resource.data.gameweek == get(/databases/$(database)/documents/config/current).data.gameweek
+        && request.time < get(/databases/$(database)/documents/config/current).data.deadline;
+
+      allow delete: if false;
+    }
+  }
+}
