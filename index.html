@@ -627,7 +627,13 @@
     (await Promise.all(picksQueries)).forEach(
       snap => snap.docs.forEach(d => picksById.set(d.id, d.data()))
     );
-    const allPicks = Array.from(picksById.values());
+    // Only ever surface data for people currently on the guest list (plus
+    // the admin). Anyone removed from the list -- or whose old picks linger
+    // -- drops out of the sheet, leaderboard, history and the unique-pick
+    // counts, so the tables always reflect just the current players.
+    const allowedEmails = new Set([ADMIN_EMAIL.toLowerCase(), ...(await loadAllowlist())]);
+    const allPicks = Array.from(picksById.values())
+      .filter(p => allowedEmails.has((p.email || "").toLowerCase()));
 
     const resultsSnap = await getDocs(collection(db, "results"));
     const results = {};        // key -> array of outcomes, e.g. ["win"] or ["win","loss"]
