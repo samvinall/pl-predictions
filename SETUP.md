@@ -82,13 +82,22 @@ file. You can also trigger it by hand from the **Actions** tab
 
 **One permissions gotcha:** the service-account key Firebase generates
 (`Project settings → Service accounts`) can *read/write data* by default
-but often **can't deploy rules** — that's a separate permission. If the
-workflow fails with a permission error, grant its service account the
-**Firebase Rules Admin** role (or **Editor**):
+but **can't deploy rules** — that needs extra permissions. Deploying both
+publishes the rules *and* checks (via the Service Usage API) that Firestore
+is enabled, so two roles are required. Symptom of missing them is a `403`
+like `Permission denied to get service [firestore.googleapis.com]`.
+
+Grant the service account these roles:
 
 - Google Cloud console → **IAM & Admin → IAM** for the `pl-predictions-sv`
   project → find the `firebase-adminsdk-...@pl-predictions-sv.iam.gserviceaccount.com`
-  principal → **Edit** → **Add role** → *Firebase Rules Admin* → Save.
+  principal → **Edit (pencil)** → **Add another role**, and add both:
+  - **Firebase Rules Admin** (`roles/firebaserules.admin`) — publishes rules
+  - **Service Usage Consumer** (`roles/serviceusage.serviceUsageConsumer`)
+    — satisfies the "is the API enabled?" check
+- Save, then re-run the workflow from the **Actions** tab.
+
+(Simpler but broader: a single **Editor** role includes both.)
 
 Do the very first publish by hand (the console method above) so the app is
 protected immediately; the workflow then keeps it in sync from there on.

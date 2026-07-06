@@ -264,6 +264,12 @@
   .chip-btn:disabled{ opacity:0.4; cursor:not-allowed; }
   .chip-btn .used{ font-size:0.6rem; color:var(--red); margin-left:0.35rem; }
   .chip-hint{ width:100%; font-size:0.72rem; color:var(--muted); font-style:italic; }
+  .chip-desc{
+    width:100%; margin:0.2rem 0 0; font-size:0.78rem; line-height:1.4; color:var(--ink);
+    background:var(--paper-2); border-left:3px solid var(--gold);
+    padding:0.5rem 0.7rem; border-radius:4px;
+  }
+  .chip-desc strong{ color:var(--pitch-dark); }
   .chip-tag{
     font-size:0.6rem; padding:0.1rem 0.45rem; border-radius:10px; margin-left:0.4rem;
     text-transform:uppercase; letter-spacing:0.04em; vertical-align:middle; font-family:'JetBrains Mono', monospace;
@@ -343,11 +349,6 @@
       <div class="team-grid" id="team-grid"></div>
       <div class="chip-row" id="chip-row"></div>
       <div class="msg" id="pick-msg"></div>
-    </div>
-
-    <div class="card">
-      <h2>Teams You've Got Left</h2>
-      <div id="remaining-list"></div>
     </div>
 
     <div class="card">
@@ -474,8 +475,7 @@
     storageBucket: "pl-predictions-sv.firebasestorage.app",
     messagingSenderId: "610117601524",
     appId: "1:610117601524:web:1919f552a6d91e20acb6a1",
-    measurementId: "G-W0ZBJHPJ7F",
-    ADMIN_EMAIL: "sam.vinall@hotmail.co.uk"
+    measurementId: "G-W0ZBJHPJ7F"
   };
 
   // ----------------------------------------------------------------
@@ -497,9 +497,9 @@
   //                regardless of whether the team won
   const SCORECARD_BONUS = 5;
   const CHIPS = {
-    double:    { label: "Double Down", desc: "Doubles this week's points." },
-    goalfest:  { label: "Goalfest",    desc: "If your team wins, score its goals instead of 1 point." },
-    scorecard: { label: "Scorecard",   desc: `Predict the exact score for +${SCORECARD_BONUS} — nail it regardless of the result.` },
+    double:    { label: "Double Down", desc: "Doubles the points you score this week. Stacks on top of the unique-pick bonus." },
+    goalfest:  { label: "Goalfest",    desc: "If your team wins, you score the number of goals it scored that match instead of the flat 1 point (goals from both fixtures in a double gameweek)." },
+    scorecard: { label: "Scorecard",   desc: `Predict your team's exact scoreline. Nail it for a flat +${SCORECARD_BONUS} — even on a draw or loss. Judged on the first fixture in a double gameweek.` },
   };
   const halfOf = gw => (gw < UNLOCK_GAMEWEEK ? 1 : 2);
 
@@ -656,11 +656,18 @@
     );
     myPickThisWeek = myPicks.find(p => p.gameweek === currentConfig.gameweek) || null;
 
+    // How many people picked each team that week -- drives the unique-pick
+    // bonus. Computed once here and shared by the leaderboard and history.
+    const popularity = {};
+    allPicks.forEach(p => {
+      const key = `${p.gameweek}_${p.team}`;
+      popularity[key] = (popularity[key] || 0) + 1;
+    });
+
     renderPickPanel(isOpen, myTeamsUsedSinceUnlock);
-    renderRemainingTeams(myTeamsUsedSinceUnlock);
     renderSheet(allPicks.filter(p => p.gameweek === currentConfig.gameweek), isOpen);
-    renderLeaderboard(allPicks, results, goalsByKey, concededByKey);
-    renderHistory(allPicks, results, goalsByKey, concededByKey, isOpen);
+    renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity);
+    renderHistory(allPicks, results, goalsByKey, concededByKey, isOpen, popularity);
     renderFixtures();
   }
 
@@ -751,7 +758,7 @@
   // Per-gameweek look-back. Everyone's past picks are already loaded (the
   // rules allow reading picks from earlier gameweeks, and the current one
   // once it's locked), so this is a pure view over data we already have.
-  function renderHistory(allPicks, results, goalsByKey, concededByKey, isOpen) {
+  function renderHistory(allPicks, results, goalsByKey, concededByKey, isOpen, popularity) {
     const card = document.getElementById("history-card");
     const selEl = document.getElementById("history-gw");
     const bodyEl = document.getElementById("history-body");
@@ -769,14 +776,6 @@
       return;
     }
     card.style.display = "";
-
-    // Popularity across all readable picks -- drives the unique-pick bonus,
-    // same as the leaderboard.
-    const popularity = {};
-    allPicks.forEach(p => {
-      const key = `${p.gameweek}_${p.team}`;
-      popularity[key] = (popularity[key] || 0) + 1;
-    });
 
     const renderWeek = (gw) => {
       const rows = allPicks
@@ -917,6 +916,12 @@
         + `</button>`;
     });
 
+    // Spell out what the active chip does, in full, once it's selected --
+    // the button title only shows on hover, this stays put.
+    if (activeChip && CHIPS[activeChip]) {
+      html += `<p class="chip-desc"><strong>${CHIPS[activeChip].label}:</strong> ${CHIPS[activeChip].desc}</p>`;
+    }
+
     // Scorecard needs a predicted scoreline. Show the entry form when
     // it's the active chip, or when the player has just clicked it.
     const showScorecard = (activeChip === "scorecard" || scorecardEditing) && myPickThisWeek && isOpen;
@@ -995,21 +1000,6 @@
       msg.textContent = `Couldn't update chip: ${e.message}`;
       msg.className = "msg error";
     }
-  }
-
-  function renderRemainingTeams(usedTeams) {
-    const el = document.getElementById("remaining-list");
-    if (!el) return;
-    if (currentConfig.gameweek >= UNLOCK_GAMEWEEK) {
-      el.innerHTML = `<p class="empty">All teams are available again from GW${UNLOCK_GAMEWEEK} onward.</p>`;
-      return;
-    }
-    const remaining = TEAMS.filter(t => !usedTeams.has(t));
-    if (remaining.length === TEAMS.length) {
-      el.innerHTML = `<p class="empty">You haven't used any teams yet.</p>`;
-      return;
-    }
-    el.innerHTML = `<p class="mono" style="font-size:0.82rem;">${remaining.join(", ")}</p>`;
   }
 
   async function submitPick(team) {
@@ -1211,13 +1201,7 @@
       .join("");
   }
 
-  function renderLeaderboard(allPicks, results, goalsByKey, concededByKey) {
-    const popularity = {};
-    allPicks.forEach(p => {
-      const key = `${p.gameweek}_${p.team}`;
-      popularity[key] = (popularity[key] || 0) + 1;
-    });
-
+  function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity) {
     const totals = {}; // email -> {name, points, played, won, form:[{gw,letter}]}
     allPicks.forEach(p => {
       const key = `${p.gameweek}_${p.team}`;
