@@ -1,0 +1,43 @@
+name: Deploy Firestore Rules
+
+# Publishes firestore.rules to Firebase automatically, so you never have to
+# paste them into the console by hand. Runs when the rules (or this workflow,
+# or firebase.json) change on `main` -- which, because `main` is PR-protected
+# and serves the live site, keeps the deployed rules in lock-step with what's
+# been reviewed and merged. Can also be run by hand from the Actions tab.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.github/workflows/deploy-rules.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      # Reuses the same service-account secret the data sync already uses.
+      # The Firebase CLI authenticates via Application Default Credentials
+      # when GOOGLE_APPLICATION_CREDENTIALS points at the key file.
+      - name: Write Firebase service account key
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/serviceAccountKey.json"
+
+      - name: Deploy Firestore rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/serviceAccountKey.json
+        run: firebase deploy --only firestore:rules --project pl-predictions-sv --non-interactive
