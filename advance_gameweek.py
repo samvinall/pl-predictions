@@ -24,9 +24,46 @@ SETUP.md for the one-off setup.
 import requests
 import sys
 from datetime import datetime, timezone
-from pull_results import get_db, is_current_season_data  # reuses the same checks
+# reuses the same checks + team-name matching table
+from pull_results import get_db, is_current_season_data, match_team_name
 
 FPL_BOOTSTRAP = "https://fantasy.premierleague.com/api/bootstrap-static/"
+FPL_FIXTURES = "https://fantasy.premierleague.com/api/fixtures/"
+
+
+def write_fixtures(db, gw_number, team_id_to_name):
+    """Write the current gameweek's fixtures to config/fixtures so the web
+    app can display them. The browser can't call the FPL API directly (it
+    serves no CORS headers), so we mirror the fixture list into Firestore
+    here. config/* is already readable by any signed-in user, so no extra
+    security rule is needed."""
+    fixtures = requests.get(FPL_FIXTURES, params={"event": gw_number}, timeout=15).json()
+    unmatched = set()
+    rows = []
+    for fx in fixtures:
+        home_raw = team_id_to_name.get(fx["team_h"], "?")
+        away_raw = team_id_to_name.get(fx["team_a"], "?")
+        kickoff = fx.get("kickoff_time")
+        rows.append({
+            "home": match_team_name(home_raw, unmatched) or home_raw,
+            "away": match_team_name(away_raw, unmatched) or away_raw,
+            # datetime -> Firestore Timestamp; None for not-yet-scheduled games
+            "kickoff": parse_fpl_timestamp(kickoff) if kickoff else None,
+            "home_score": fx.get("team_h_score"),
+            "away_score": fx.get("team_a_score"),
+            "finished": bool(fx.get("finished")),
+            "started": bool(fx.get("started")),
+        })
+    # Kick off order; undated fixtures (kickoff None) sort last.
+    far_future = datetime.max.replace(tzinfo=timezone.utc)
+    rows.sort(key=lambda r: r["kickoff"] or far_future)
+
+    db.collection("config").document("fixtures").set({
+        "gameweek": gw_number,
+        "fixtures": rows,
+        "updated": datetime.now(timezone.utc),
+    })
+    print(f"✅ Wrote {len(rows)} fixtures for GW{gw_number} to config/fixtures.")
 
 
 def parse_fpl_timestamp(ts):
@@ -75,6 +112,10 @@ def main():
         print(f"config/current already correct: GW{gw_number}, deadline {deadline_dt.isoformat()}")
     else:
         print(f"✅ Advanced config/current to GW{gw_number}, deadline {deadline_dt.isoformat()}")
+
+    # Refresh the fixtures list for whichever gameweek is now current, so
+    # the app can show it (and keep live scores updated as games finish).
+    write_fixtures(db, gw_number, team_id_to_name)
 
 
 if __name__ == "__main__":

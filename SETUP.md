@@ -50,8 +50,10 @@ Total setup time: ~20 minutes, one-off.
    top of the `<script type="module">` block. Replace it with the one
    you copied in Part 1.
 2. In the same file, find `TEAMS`, `UNLOCK_GAMEWEEK`,
-   `UNIQUE_THRESHOLD`, and `BONUS_MULTIPLIER` near the top of the
-   script — adjust to match whatever you finalize with your friends.
+   `UNIQUE_THRESHOLD`, `BONUS_MULTIPLIER`, `CHIPS`, and
+   `SCORECARD_BONUS` near the top of the script — adjust to match
+   whatever you finalize with your friends. `UNLOCK_GAMEWEEK` also marks
+   the split between the two halves for chip usage.
 3. Open `firestore.rules` and replace `YOUR_ADMIN_EMAIL@gmail.com`
    with the Google account email you'll use as the admin (the one
    entering results each week).
@@ -231,3 +233,50 @@ If you need to enter a double-gameweek result manually (API down),
 tick **"Double gameweek — add as extra fixture"** in the admin panel
 before submitting the second result — this appends to the array
 instead of replacing it.
+
+## Chips
+
+Each player can play at most **one chip per gameweek**, and each chip
+can be used **once per half-season** (the two halves split at
+`UNLOCK_GAMEWEEK`, i.e. GW1–19 and GW20+). Chips are chosen in the
+"Your Pick" card and, like picks, stay hidden from rivals and are
+changeable right up to the deadline. Chip effects **stack** with the
+unique-pick bonus.
+
+- **Double Down** — doubles that week's win points.
+- **Goalfest** — if your team wins, you score the number of goals your
+  team scored that fixture, instead of the flat win point. (In a double
+  gameweek it sums the goals from each winning fixture.)
+- **Scorecard** — predict the exact scoreline of your team's match; nail
+  it for a flat **+5** (set by `SCORECARD_BONUS`), *regardless* of the
+  result — you can score it on a losing scoreline. The prediction is
+  entered from your team's perspective ("your team _ – _ opponent"), so
+  home/away doesn't matter. The +5 is flat and is **not** multiplied by
+  the unique-pick bonus. In a double gameweek the prediction is judged
+  against the team's **first** fixture only, not whichever one happens
+  to fit.
+
+Chips are stored as an optional `chip` field (`"double"`, `"goalfest"`,
+or `"scorecard"`) on the pick document; Scorecard also stores a
+`scorecard: { for, against }` map. No security-rule change is needed.
+Scoring lives in one shared `scorePick()` function used by both the
+league table and the history view.
+
+## Goals (for the Goalfest & Scorecard chips)
+
+To score these chips, results need the scoreline. `pull_results.py`
+stores two **arrays** on each result document, aligned to the `results`
+array: `goals` (scored by the picked team) and `conceded` (scored
+against it) — e.g. `results: ["win"]`, `goals: [3]`, `conceded: [1]`.
+The manual admin override panel has **"Goals for"** and **"Goals
+against"** boxes for the same purpose. If goals are unknown for a result
+(older data, or left blank), Goalfest falls back to scoring that week as
+an ordinary win, and Scorecard simply can't register a hit.
+
+## Fixtures list
+
+`advance_gameweek.py` mirrors the current gameweek's fixtures into
+`config/fixtures` (the browser can't call the FPL API directly — it
+serves no CORS headers). The app reads that doc to show the fixtures
+rail, with live scores as games finish. `config/*` is already readable
+by any signed-in user, so no extra security rule is needed.

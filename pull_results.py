@@ -151,7 +151,9 @@ def build_results(team_id_to_name, fixtures):
       prematurely}
     """
     unmatched = set()
-    team_gw_outcomes = {}  # (gameweek, team) -> [result, ...]
+    team_gw_outcomes = {}   # (gameweek, team) -> [result, ...]
+    team_gw_goals = {}      # (gameweek, team) -> [goals_scored_by_team, ...]
+    team_gw_conceded = {}   # (gameweek, team) -> [goals_conceded_by_team, ...]
 
     gw_scheduled_teams = {}
     gw_still_pending = {}
@@ -183,10 +185,19 @@ def build_results(team_id_to_name, fixtures):
         else:
             home_result, away_result = "draw", "draw"
 
-        for team, result in [(home_name, home_result), (away_name, away_result)]:
+        for team, result, goals_for, goals_against in [
+            (home_name, home_result, home_score, away_score),
+            (away_name, away_result, away_score, home_score),
+        ]:
             if team is None:
                 continue
             team_gw_outcomes.setdefault((gw, team), []).append(result)
+            # Goals for/against this team in this fixture -- kept in the
+            # same order as its results, so the "Goalfest" chip (goals
+            # scored in a winning fixture) and the "Scorecard" chip (exact
+            # scoreline) can read them off.
+            team_gw_goals.setdefault((gw, team), []).append(goals_for)
+            team_gw_conceded.setdefault((gw, team), []).append(goals_against)
 
     if unmatched:
         print("⚠️  Couldn't match these team names from the FPL API -- add them to ALIASES:")
@@ -198,7 +209,11 @@ def build_results(team_id_to_name, fixtures):
         if len(outcomes) > 1:
             print(f"ℹ️  Double gameweek: GW{gw} {team} played {len(outcomes)} fixtures "
                   f"({', '.join(outcomes)}) -- scored per-win.")
-        results.append({"gameweek": gw, "team": team, "results": outcomes})
+        results.append({
+            "gameweek": gw, "team": team, "results": outcomes,
+            "goals": team_gw_goals.get((gw, team), []),
+            "conceded": team_gw_conceded.get((gw, team), []),
+        })
 
     return results, gw_scheduled_teams, gw_still_pending
 
