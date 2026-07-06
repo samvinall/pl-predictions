@@ -22,8 +22,9 @@ SETUP.md for the one-off setup.
 """
 
 import requests
+import sys
 from datetime import datetime, timezone
-from pull_results import get_db  # reuses the same Firebase admin connection
+from pull_results import get_db, is_current_season_data  # reuses the same checks
 
 FPL_BOOTSTRAP = "https://fantasy.premierleague.com/api/bootstrap-static/"
 
@@ -35,6 +36,17 @@ def parse_fpl_timestamp(ts):
 
 def main():
     data = requests.get(FPL_BOOTSTRAP, timeout=15).json()
+    team_id_to_name = {t["id"]: t["name"] for t in data["teams"]}
+
+    if not is_current_season_data(team_id_to_name):
+        print("🛑 The FPL API still appears to be serving last season's data — "
+              "none of this season's promoted clubs (Coventry City, Ipswich "
+              "Town, Hull City) were found. Refusing to touch config/current "
+              "to avoid setting the wrong gameweek/deadline. This is expected "
+              "outside of the season and will resolve itself once FPL rolls "
+              "over to 2026/27.")
+        sys.exit(1)
+
     events = data["events"]
     now = datetime.now(timezone.utc)
 

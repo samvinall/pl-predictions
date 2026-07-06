@@ -56,6 +56,7 @@ warning so you can add it to ALIASES yourself -- takes 10 seconds.
 """
 
 import requests
+import sys
 import firebase_admin
 from firebase_admin import credentials, firestore
 
@@ -93,9 +94,25 @@ ALIASES = {
 FPL_BOOTSTRAP = "https://fantasy.premierleague.com/api/bootstrap-static/"
 FPL_FIXTURES = "https://fantasy.premierleague.com/api/fixtures/"
 
+# These three clubs are new to the Premier League for 2026/27 and did
+# NOT exist in it last season. The FPL API sometimes keeps serving the
+# previous completed season's data for weeks after fixtures are
+# announced, until FPL officially rolls the game over to the new
+# season (usually not long before kickoff). If none of these clubs
+# show up, we're almost certainly looking at stale 2025/26 data.
+PROMOTED_CLUBS_26_27 = {"Coventry City", "Ipswich Town", "Hull City"}
+
 
 def normalize(name):
     return name.strip().lower()
+
+
+def is_current_season_data(team_id_to_name):
+    """Returns True if the FPL API appears to be serving 2026/27 data
+    (i.e. at least one of this season's promoted clubs is present)."""
+    dummy_log = set()
+    matched = {match_team_name(raw, dummy_log) for raw in team_id_to_name.values()}
+    return bool(matched & PROMOTED_CLUBS_26_27)
 
 
 def match_team_name(fpl_name, unmatched_log):
@@ -243,6 +260,19 @@ def write_to_firestore(db, results):
 
 def main():
     team_id_to_name, fixtures = fetch_fpl_data()
+
+    if not is_current_season_data(team_id_to_name):
+        print("🛑 The FPL API still appears to be serving last season's data — "
+              "none of this season's promoted clubs (Coventry City, Ipswich "
+              "Town, Hull City) were found. Refusing to write anything, to "
+              "avoid contaminating Firestore with stale 2025/26 results. "
+              "This is expected outside of the season and will resolve "
+              "itself once FPL rolls over to 2026/27 — try again closer to "
+              "kickoff (or re-run manually then).")
+        sys.exit(1)  # non-zero exit -> the GitHub Action shows this run as
+                      # failed (red X), so you notice rather than it silently
+                      # succeeding while writing nothing.
+
     results, gw_scheduled_teams, gw_still_pending = build_results(team_id_to_name, fixtures)
 
     db = get_db()

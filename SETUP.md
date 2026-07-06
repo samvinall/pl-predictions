@@ -104,6 +104,34 @@ After the gameweek's matches finish, add results:
 3. Refresh the app — the leaderboard recalculates automatically from
    picks + results, nothing to compute by hand.
 
+## A note on testing before the season actually starts
+
+The FPL API sometimes keeps serving the **previous completed season's**
+data for weeks after fixtures are announced — it doesn't necessarily
+"roll over" to the new season until shortly before kickoff. If you run
+`pull_results.py` or `advance_gameweek.py` well before August, there's
+a real chance the FPL bootstrap data still reflects 2025/26 (old
+teams, old finished results), which would otherwise get written into
+your `results`/`config` collections as if it were real.
+
+Both scripts now guard against this automatically: they check whether
+any of this season's promoted clubs (Coventry City, Ipswich Town, Hull
+City) appear in the API's team list. If none do, the script prints a
+warning and exits without writing anything — and because it exits with
+a non-zero status, the GitHub Actions run shows as failed (red X) so
+you'll notice, rather than it quietly succeeding while doing nothing
+or, worse, writing stale data. This is expected and harmless if you
+see it before the season starts — it'll resolve itself once FPL
+switches over.
+
+**If you already ran the scripts before this guard existed** and
+suspect stale data got written: Firestore console → `results`
+collection → three-dot menu next to the collection name → **Delete
+collection** → confirm. Also check `config/current` and delete it if
+the `gameweek` number looks wrong (e.g. doesn't correspond to anything
+sensible) — a fresh run of `advance_gameweek.py` will recreate it
+correctly once the API has real 2026/27 data.
+
 ## What's enforced automatically vs. what relies on trust
 
 **Enforced by Firestore security rules (can't be bypassed, even via
