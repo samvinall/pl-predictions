@@ -890,6 +890,11 @@
     const row = document.getElementById("chip-row");
     const half = halfOf(currentConfig.gameweek);
     const activeChip = myPickThisWeek?.chip || null;
+    // While the Scorecard entry form is open (clicked, but not yet played),
+    // show Scorecard as the highlighted chip. This is purely visual --
+    // nothing is saved and the "Chip set" message is left untouched until
+    // "Play Scorecard" is pressed.
+    const displayActive = scorecardEditing ? "scorecard" : activeChip;
 
     // Which chips have I already spent in this half (on a different week)?
     const spentThisHalf = {};
@@ -902,11 +907,11 @@
     let html = `<span class="chip-label">Chip — one per week, each usable once per half (H${half})</span>`;
 
     // "No chip" clears whatever is set this week.
-    html += `<button class="chip-btn${activeChip ? "" : " selected"}" `
+    html += `<button class="chip-btn${displayActive ? "" : " selected"}" `
       + `data-chip="" ${(!isOpen || !myPickThisWeek) ? "disabled" : ""}>No chip</button>`;
 
     Object.entries(CHIPS).forEach(([id, meta]) => {
-      const selected = activeChip === id;
+      const selected = displayActive === id;
       const spentOn = spentThisHalf[id];
       const lockedElsewhere = spentOn && !selected;   // used on another week this half
       const disabled = !isOpen || !myPickThisWeek || lockedElsewhere;
@@ -918,8 +923,8 @@
 
     // Spell out what the active chip does, in full, once it's selected --
     // the button title only shows on hover, this stays put.
-    if (activeChip && CHIPS[activeChip]) {
-      html += `<p class="chip-desc"><strong>${CHIPS[activeChip].label}:</strong> ${CHIPS[activeChip].desc}</p>`;
+    if (displayActive && CHIPS[displayActive]) {
+      html += `<p class="chip-desc"><strong>${CHIPS[displayActive].label}:</strong> ${CHIPS[displayActive].desc}</p>`;
     }
 
     // Scorecard needs a predicted scoreline. Show the entry form when
