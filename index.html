@@ -128,6 +128,7 @@
   .team-chip{
     border:1px solid var(--line);
     background:var(--paper);
+    color:var(--ink);
     border-radius:8px;
     padding:0.6rem 0.7rem;
     font-family:'JetBrains Mono', monospace;
@@ -138,7 +139,7 @@
     justify-content:space-between;
     align-items:center;
   }
-  .team-chip:hover{ border-color:var(--pitch); }
+  .team-chip:hover{ border-color:var(--pitch); background:var(--paper-2); color:var(--ink); }
   .team-chip.selected{
     background:var(--pitch);
     border-color:var(--pitch);
@@ -342,7 +343,7 @@
   const WIN_POINTS = 1;
 
   // Must exactly match the email in the isAdmin() function in firestore.rules
-  const ADMIN_EMAIL = "YOUR_ADMIN_EMAIL@gmail.com";
+  const ADMIN_EMAIL = "sam.vinall@hotmail.co.uk";
 
   const TEAMS = [
     "Arsenal","Aston Villa","Bournemouth","Brentford","Brighton","Chelsea",
@@ -400,8 +401,25 @@
       ? `Locks ${deadlineDate.toLocaleString()}`
       : `Locked since ${deadlineDate.toLocaleString()}`;
 
-    const allPicksSnap = await getDocs(collection(db, "picks"));
-    const allPicks = allPicksSnap.docs.map(d => d.data());
+    // Fetch picks in a way that satisfies the security rules (see
+    // firestore.rules): your own picks (any gameweek), everyone's picks
+    // from already-played gameweeks, and -- only once this gameweek's
+    // deadline has passed -- everyone's picks for the current gameweek.
+    // Before the deadline, rivals' current picks are never sent to the
+    // browser at all, so they can't be dug out of the network tab.
+    const picksCol = collection(db, "picks");
+    const picksQueries = [
+      getDocs(query(picksCol, where("uid", "==", currentUser.uid))),
+      getDocs(query(picksCol, where("gameweek", "<", currentConfig.gameweek))),
+    ];
+    if (!isOpen) {
+      picksQueries.push(getDocs(query(picksCol, where("gameweek", "==", currentConfig.gameweek))));
+    }
+    const picksById = new Map();
+    (await Promise.all(picksQueries)).forEach(
+      snap => snap.docs.forEach(d => picksById.set(d.id, d.data()))
+    );
+    const allPicks = Array.from(picksById.values());
 
     const resultsSnap = await getDocs(collection(db, "results"));
     const results = {}; // key -> array of outcomes, e.g. ["win"] or ["win","loss"]
