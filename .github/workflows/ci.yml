@@ -1,0 +1,25 @@
+name: CI
+
+# Runs the unit tests on every push and on every pull request. Make this
+# check "required" in the branch-protection settings for `main` so nothing
+# can be merged in unless it's green (see SETUP.md).
+on:
+  push:
+  pull_request:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # The tests are standard-library only (requests / firebase-admin are
+      # imported lazily), so there's nothing to install.
+      - name: Run unit tests
+        run: python -m unittest discover -s test -p 'test_*.py' -v

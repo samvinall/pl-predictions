@@ -280,3 +280,59 @@ an ordinary win, and Scorecard simply can't register a hit.
 serves no CORS headers). The app reads that doc to show the fixtures
 rail, with live scores as games finish. `config/*` is already readable
 by any signed-in user, so no extra security rule is needed.
+
+## Development, testing & CI
+
+Unit tests cover the pure logic in `pull_results.py` — turning FPL
+fixtures into results, team-name matching, the stale-season guard, and
+forfeit detection. They're standard-library only (no `pip install`
+needed). Run them with:
+
+```
+python -m unittest discover -s test
+```
+
+**Run tests automatically before every push** (local safety net):
+
+```
+git config core.hooksPath .githooks
+```
+
+That points git at the committed `.githooks/pre-push`, which runs the
+tests and blocks the push if any fail (override in a pinch with
+`git push --no-verify`).
+
+**CI** (`.github/workflows/ci.yml`) runs the same tests on every push
+and every pull request. This is the enforced gate — see below.
+
+## Protecting `main`
+
+The site is served by GitHub Pages straight from `main`, so whatever
+lands on `main` goes live. Lock it down so changes can only arrive via a
+reviewed, tested pull request:
+
+1. GitHub → repo **Settings → Branches → Add branch ruleset** (or
+   "Add rule" under classic branch protection). Target branch: `main`.
+2. Enable **Require a pull request before merging**. (Leave "require
+   approvals" at 0 if you're solo, otherwise you won't be able to merge
+   your own PRs.)
+3. Enable **Require status checks to pass before merging**, and select
+   the **`python-tests`** check (it appears in the list after the CI
+   workflow has run at least once). Tick **Require branches to be up to
+   date** too.
+4. Enable **Block force pushes** and **Restrict deletions**.
+5. Save.
+
+From then on you can't `git push` to `main` directly — you branch, push,
+open a PR, let CI go green, and merge. Prefer the CLI? With the `gh`
+tool authenticated:
+
+```
+gh api -X PUT repos/samvinall/pl-predictions/branches/main/protection \
+  -H "Accept: application/vnd.github+json" \
+  -f 'required_pull_request_reviews[required_approving_review_count]=0' \
+  -f 'required_status_checks[strict]=true' \
+  -f 'required_status_checks[contexts][]=python-tests' \
+  -f 'enforce_admins=true' \
+  -f 'restrictions=null'
+```

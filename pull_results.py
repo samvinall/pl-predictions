@@ -55,10 +55,13 @@ table below; anything it can't confidently match gets printed as a
 warning so you can add it to ALIASES yourself -- takes 10 seconds.
 """
 
-import requests
 import sys
-import firebase_admin
-from firebase_admin import credentials, firestore
+
+# NB: `requests` and `firebase_admin` are imported lazily inside the
+# functions that need them (fetch_fpl_data / get_db) rather than at the
+# top. That keeps the pure logic in this module -- build_results,
+# match_team_name, is_current_season_data -- importable with only the
+# standard library, so the unit tests (and CI) need no third-party deps.
 
 # ---------- CONFIG ----------
 SERVICE_ACCOUNT_FILE = "serviceAccountKey.json"
@@ -132,6 +135,7 @@ def match_team_name(fpl_name, unmatched_log):
 
 
 def fetch_fpl_data():
+    import requests
     teams_resp = requests.get(FPL_BOOTSTRAP, timeout=15).json()
     team_id_to_name = {t["id"]: t["name"] for t in teams_resp["teams"]}
     fixtures = requests.get(FPL_FIXTURES, timeout=15).json()
@@ -239,6 +243,8 @@ def detect_forfeits(db, gw_scheduled_teams, gw_still_pending):
 
 
 def get_db():
+    import firebase_admin
+    from firebase_admin import credentials, firestore
     cred = credentials.Certificate(SERVICE_ACCOUNT_FILE)
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)

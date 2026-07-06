@@ -21,11 +21,13 @@ reusing the same serviceAccountKey.json / Firestore connection -- see
 SETUP.md for the one-off setup.
 """
 
-import requests
 import sys
 from datetime import datetime, timezone
 # reuses the same checks + team-name matching table
 from pull_results import get_db, is_current_season_data, match_team_name
+# `requests` is imported lazily inside the functions that use it, so this
+# module stays importable with only the standard library (see the note in
+# pull_results.py).
 
 FPL_BOOTSTRAP = "https://fantasy.premierleague.com/api/bootstrap-static/"
 FPL_FIXTURES = "https://fantasy.premierleague.com/api/fixtures/"
@@ -37,6 +39,7 @@ def write_fixtures(db, gw_number, team_id_to_name):
     serves no CORS headers), so we mirror the fixture list into Firestore
     here. config/* is already readable by any signed-in user, so no extra
     security rule is needed."""
+    import requests
     fixtures = requests.get(FPL_FIXTURES, params={"event": gw_number}, timeout=15).json()
     unmatched = set()
     rows = []
@@ -72,6 +75,7 @@ def parse_fpl_timestamp(ts):
 
 
 def main():
+    import requests
     data = requests.get(FPL_BOOTSTRAP, timeout=15).json()
     team_id_to_name = {t["id"]: t["name"] for t in data["teams"]}
 

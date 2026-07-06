@@ -1,0 +1,14 @@
+#!/bin/sh
+# Runs the unit tests before allowing a push. This is a local safety net;
+# the enforced gate is the CI check + branch protection on `main`.
+#
+# Enable it once per clone with:
+#     git config core.hooksPath .githooks
+#
+# To push without running the tests in a pinch: git push --no-verify
+echo "Running unit tests before push..."
+if ! python3 -m unittest discover -s test -p 'test_*.py'; then
+  echo "❌ Tests failed — push aborted. Fix them, or override with 'git push --no-verify'."
+  exit 1
+fi
+echo "✅ Tests passed."
