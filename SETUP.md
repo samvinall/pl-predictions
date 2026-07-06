@@ -336,3 +336,4 @@ gh api -X PUT repos/samvinall/pl-predictions/branches/main/protection \
   -f 'enforce_admins=true' \
   -f 'restrictions=null'
 ```
+
