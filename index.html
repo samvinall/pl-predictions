@@ -315,6 +315,14 @@
     <button id="signin-btn">Sign in with Google</button>
   </div>
 
+  <div id="denied-gate" style="display:none; text-align:center; padding:3rem 1.5rem;">
+    <p class="eyebrow">Not on the guest list</p>
+    <p style="color:var(--muted); max-width:44ch; margin:0.8rem auto 1.4rem;">
+      <span id="denied-email" class="mono"></span> isn't on the list of players for this league. If you think that's a mistake, ask Sam to add you.
+    </p>
+    <button id="denied-retry">Try a different account</button>
+  </div>
+
   <div id="app" style="display:none;">
 
     <div class="status-row">
@@ -425,6 +433,21 @@
       <div id="admin-recent"></div>
     </div>
 
+    <div class="card" id="admin-access-card" style="display:none; border-color:var(--gold);">
+      <h2>Admin &mdash; Guest List</h2>
+      <p class="eyebrow">Only these accounts can sign in and play. Anyone else is turned away at the door. Emails match the Google account they sign in with (case doesn't matter).</p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:end; margin-top:0.8rem;">
+        <div style="flex:1; min-width:14rem;">
+          <label class="eyebrow" for="allow-email">Add an email</label><br/>
+          <input type="email" id="allow-email" placeholder="friend@example.com" style="padding:0.5rem; font-family:'JetBrains Mono',monospace; width:100%;" />
+        </div>
+        <button id="allow-add">Add</button>
+      </div>
+      <div class="msg" id="allow-msg"></div>
+      <p class="eyebrow" style="margin-top:1rem;">Current guest list</p>
+      <div id="allow-list"></div>
+    </div>
+
   </div>
 
 </main>
@@ -504,26 +527,71 @@
   let myPickThisWeek = null;
   let countdownTimer = null;
   let scorecardEditing = false;  // is the Scorecard score-entry form open?
+  let showingDenied = false;     // are we currently showing the "not on the guest list" screen?
 
   document.getElementById("signin-btn").onclick = () => signInWithPopup(auth, provider).catch(e => alert(e.message));
   document.getElementById("signout-btn").onclick = () => signOut(auth);
+  document.getElementById("denied-retry").onclick = () => {
+    showingDenied = false;
+    document.getElementById("denied-gate").style.display = "none";
+    document.getElementById("signin-gate").style.display = "block";
+  };
+
+  // Read the guest list (config/allowlist) and decide whether this account
+  // is allowed in. The admin is always allowed. Matching is case-insensitive.
+  // The real enforcement lives in firestore.rules; this just controls the UI
+  // and signs unwanted accounts straight back out.
+  async function isEmailAllowed(email) {
+    const e = (email || "").toLowerCase();
+    if (e === ADMIN_EMAIL.toLowerCase()) return true;
+    try {
+      const snap = await getDoc(doc(db, "config", "allowlist"));
+      const emails = (snap.exists() && snap.data().emails) || [];
+      return emails.some(a => (a || "").toLowerCase() === e);
+    } catch (err) {
+      // Fail closed: if we can't read the list, don't let anyone in.
+      return false;
+    }
+  }
 
   onAuthStateChanged(auth, async (user) => {
     currentUser = user;
     if (user) {
+      if (!(await isEmailAllowed(user.email))) {
+        // Turned away at the door: show the denial screen and sign out. The
+        // sign-out fires this handler again with user=null; showingDenied
+        // keeps the denial screen up rather than falling back to sign-in.
+        showingDenied = true;
+        currentUser = null;
+        document.getElementById("denied-email").textContent = user.email;
+        document.getElementById("signin-gate").style.display = "none";
+        document.getElementById("app").style.display = "none";
+        document.getElementById("denied-gate").style.display = "block";
+        await signOut(auth);
+        return;
+      }
+      showingDenied = false;
+      document.getElementById("denied-gate").style.display = "none";
       document.getElementById("signin-gate").style.display = "none";
       document.getElementById("app").style.display = "block";
       document.getElementById("whoami").textContent = `Signed in as ${user.displayName} (${user.email})`;
 
       if (user.email === ADMIN_EMAIL) {
         document.getElementById("admin-card").style.display = "block";
+        document.getElementById("admin-access-card").style.display = "block";
         setupAdminPanel();
+        setupAccessPanel();
       }
 
       await loadEverything();
     } else {
-      document.getElementById("signin-gate").style.display = "block";
       document.getElementById("app").style.display = "none";
+      // Don't clobber the denial screen with the sign-in gate when the
+      // sign-out was triggered by us turning an unlisted account away.
+      if (!showingDenied) {
+        document.getElementById("denied-gate").style.display = "none";
+        document.getElementById("signin-gate").style.display = "block";
+      }
     }
   });
 
@@ -1061,6 +1129,85 @@
     el.innerHTML = manual
       .sort((a, b) => b.gameweek - a.gameweek)
       .map(r => `<div class="pick-tile"><span class="mono" style="font-size:0.78rem;">GW${r.gameweek} — ${r.team} — [${(r.results || []).join(", ")}]</span></div>`)
+      .join("");
+  }
+
+  // Admin-only: manage config/allowlist. Emails are stored lower-cased so
+  // matching against the signed-in Google email is consistent. The admin's
+  // own email is always allowed by the rules even if it isn't in the list.
+  async function loadAllowlist() {
+    const snap = await getDoc(doc(db, "config", "allowlist"));
+    const emails = (snap.exists() && snap.data().emails) || [];
+    // Dedupe + lower-case defensively, and keep it sorted for display.
+    return [...new Set(emails.map(e => (e || "").toLowerCase()))].sort();
+  }
+
+  function setupAccessPanel() {
+    const input = document.getElementById("allow-email");
+    const msg = document.getElementById("allow-msg");
+
+    const save = async (emails) => {
+      await setDoc(doc(db, "config", "allowlist"), { emails }, { merge: true });
+    };
+
+    document.getElementById("allow-add").onclick = async () => {
+      const email = input.value.trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        msg.textContent = "Enter a valid email address.";
+        msg.className = "msg error";
+        return;
+      }
+      try {
+        const emails = await loadAllowlist();
+        if (emails.includes(email)) {
+          msg.textContent = `${email} is already on the list.`;
+          msg.className = "msg";
+        } else {
+          emails.push(email);
+          await save(emails.sort());
+          msg.textContent = `Added ${email}.`;
+          msg.className = "msg ok";
+          input.value = "";
+        }
+        renderAllowlist(await loadAllowlist());
+      } catch (e) {
+        msg.textContent = `Couldn't save: ${e.message}`;
+        msg.className = "msg error";
+      }
+    };
+
+    // Remove buttons are wired up via event delegation in renderAllowlist.
+    document.getElementById("allow-list").onclick = async (ev) => {
+      const btn = ev.target.closest("button[data-remove]");
+      if (!btn) return;
+      const email = btn.getAttribute("data-remove");
+      try {
+        const emails = (await loadAllowlist()).filter(e => e !== email);
+        await save(emails);
+        msg.textContent = `Removed ${email}.`;
+        msg.className = "msg ok";
+        renderAllowlist(emails);
+      } catch (e) {
+        msg.textContent = `Couldn't save: ${e.message}`;
+        msg.className = "msg error";
+      }
+    };
+
+    loadAllowlist().then(renderAllowlist).catch(() => {});
+  }
+
+  function renderAllowlist(emails) {
+    const el = document.getElementById("allow-list");
+    if (!el) return;
+    if (!emails || emails.length === 0) {
+      el.innerHTML = `<p class="empty">No one added yet — only you can get in.</p>`;
+      return;
+    }
+    el.innerHTML = emails
+      .map(e => `<div class="pick-tile" style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem;">
+        <span class="mono" style="font-size:0.78rem;">${e}</span>
+        <button class="ghost" data-remove="${e}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Remove</button>
+      </div>`)
       .join("");
   }
 

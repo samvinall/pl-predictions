@@ -61,10 +61,39 @@ Total setup time: ~20 minutes, one-off.
    `<script>` block in `index.html` — this is what reveals the admin
    override panel to you (and only you) once signed in. It must match
    the rules file exactly, or the panel won't work.
-5. Deploy the rules. Easiest way without installing anything:
-   - In the Firebase console, go to **Firestore Database → Rules** tab.
-   - Paste the full contents of `firestore.rules` in, replacing the
-     default, and click **Publish**.
+5. Deploy the rules. Two ways:
+   - **By hand (one-off / no CI):** in the Firebase console, go to
+     **Firestore Database → Rules** tab, paste the full contents of
+     `firestore.rules` in, replacing the default, and click **Publish**.
+   - **Automatically (recommended once CI is set up):** a GitHub Action
+     re-publishes `firestore.rules` for you whenever it changes on `main`
+     — see *Auto-deploying the security rules* below.
+
+## Auto-deploying the security rules
+
+You don't have to paste rules into the console by hand every time you
+change them. `.github/workflows/deploy-rules.yml` runs the Firebase CLI
+(`firebase deploy --only firestore:rules`) whenever `firestore.rules`
+changes on `main`, so the live rules always match what's been reviewed and
+merged. It reuses the same `FIREBASE_SERVICE_ACCOUNT` secret as the data
+sync (Part 6) and reads `firebase.json`, which just points at the rules
+file. You can also trigger it by hand from the **Actions** tab
+(**Deploy Firestore Rules → Run workflow**).
+
+**One permissions gotcha:** the service-account key Firebase generates
+(`Project settings → Service accounts`) can *read/write data* by default
+but often **can't deploy rules** — that's a separate permission. If the
+workflow fails with a permission error, grant its service account the
+**Firebase Rules Admin** role (or **Editor**):
+
+- Google Cloud console → **IAM & Admin → IAM** for the `pl-predictions-sv`
+  project → find the `firebase-adminsdk-...@pl-predictions-sv.iam.gserviceaccount.com`
+  principal → **Edit** → **Add role** → *Firebase Rules Admin* → Save.
+
+Do the very first publish by hand (the console method above) so the app is
+protected immediately; the workflow then keeps it in sync from there on.
+The project id in the workflow (`pl-predictions-sv`) must match your
+Firebase project — change it if you forked this for a different project.
 
 ## Part 4 — Host it on GitHub Pages
 
@@ -213,6 +242,33 @@ alone rather than overwriting it with whatever it computes from the
 API. So if the automated pull ever gets something wrong (or can't run
 at all because the FPL API is down), your manual fix always sticks —
 you don't need to worry about it getting silently reverted later.
+
+## Guest list (who's allowed in)
+
+Google Sign-In will let *anyone* with a Google account get as far as the
+sign-in popup — Firebase mints them a token no matter what. So access is
+controlled by a **guest list** rather than by blocking sign-in:
+
+- The list lives in Firestore at `config/allowlist` as a document with a
+  single field `emails` (an array of lower-cased addresses).
+- When someone signs in, the app checks their email against that list. If
+  it's not there (and they're not the admin), they're immediately signed
+  back out and shown a "not on the guest list" screen — they never see the
+  app or any data.
+- This is also enforced by the security rules: `results` and `picks` can
+  only be read or written by an allow-listed account (or the admin), so a
+  determined person can't pull the data out via dev tools even if they got
+  past the UI. The admin (`ADMIN_EMAIL`) is always allowed, in the list or
+  not.
+
+**Managing the list:** sign in as the admin and use the **Admin — Guest
+List** card at the bottom of the page. Type an email and click **Add**, or
+click **Remove** next to anyone already on it. Matching is case-insensitive
+and emails are stored lower-cased. No Firestore console needed — it works
+from your phone, same as the manual result override.
+
+The very first time, the list is empty and only you (the admin) can get in
+— add everyone else from the admin card once you're signed in.
 
 ## Double gameweeks
 

@@ -12,8 +12,23 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email == "sam.vinall@hotmail.co.uk";
     }
 
-    // config/current holds { gameweek: number, deadline: timestamp }
-    // You update this once a week in the Firebase console before picks open.
+    // The guest list. config/allowlist holds { emails: [ "a@x.com", ... ] }
+    // (lower-cased). Only allow-listed accounts (plus the admin) can read or
+    // write any game data -- this is the real gate, not just the UI. The
+    // client also checks this list on sign-in and signs out anyone missing,
+    // but even if that were bypassed the rules below still refuse them.
+    function isAllowed() {
+      return isAdmin() || (
+        isSignedIn()
+        && exists(/databases/$(database)/documents/config/allowlist)
+        && request.auth.token.email in get(/databases/$(database)/documents/config/allowlist).data.emails
+      );
+    }
+
+    // config/current holds { gameweek: number, deadline: timestamp }, and
+    // config/allowlist holds the guest list. Any signed-in account may read
+    // config so the sign-in gate can look itself up in the allowlist before
+    // it's been admitted; only the admin can write it.
     match /config/{doc} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -22,7 +37,7 @@ service cloud.firestore {
     // results/{gw_team} holds { gameweek, team, result: "win"|"draw"|"loss" }
     // Only you can enter these, and only from the real match outcome.
     match /results/{doc} {
-      allow read: if isSignedIn();
+      allow read: if isAllowed();
       allow write: if isAdmin();
     }
 
@@ -37,7 +52,7 @@ service cloud.firestore {
       // only matches readable docs (see loadEverything in index.html),
       // because Firestore rejects a query that could return a doc the
       // rule forbids -- rules filter nothing on their own.
-      allow read: if isSignedIn() && (
+      allow read: if isAllowed() && (
         resource.data.uid == request.auth.uid
         || resource.data.gameweek < get(/databases/$(database)/documents/config/current).data.gameweek
         || request.time >= get(/databases/$(database)/documents/config/current).data.deadline
@@ -48,7 +63,7 @@ service cloud.firestore {
       // and only before that gameweek's deadline. `resource` is null on
       // create and the existing doc on update, so the ownership check
       // covers both cases -- nobody can overwrite someone else's pick.
-      allow create, update: if isSignedIn()
+      allow create, update: if isAllowed()
         && request.resource.data.uid == request.auth.uid
         && (resource == null || resource.data.uid == request.auth.uid)
         && request.resource.data.gameweek == get(/databases/$(database)/documents/config/current).data.gameweek
