@@ -78,6 +78,16 @@
 
     <!-- THIS WEEK -->
     <section id="tab-thisweek" class="tab-panel" role="tabpanel">
+      <div class="card" id="profile-card">
+        <h2>Your Display Name</h2>
+        <p class="eyebrow">How you appear on the sheet, league table and history.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-top:0.5rem;">
+          <input id="profile-name" type="text" maxlength="24" placeholder="Your name" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;" />
+          <button id="profile-save">Save name</button>
+        </div>
+        <div class="msg" id="profile-msg"></div>
+      </div>
+
       <div class="card">
         <h2>Your Bet This Week</h2>
         <div id="thisweek-mypick"></div>
@@ -197,6 +207,12 @@
       <div class="msg" id="allow-msg"></div>
       <p class="eyebrow" style="margin-top:1rem;">Current guest list</p>
       <div id="allow-list"></div>
+    </div>
+
+    <div class="card" id="admin-names-card" style="border-color:var(--gold);">
+      <h2>Admin &mdash; Player Names</h2>
+      <p class="eyebrow">Override any player's display name (blank = use their own).</p>
+      <div id="admin-names-list"></div>
     </div>
 
     </section><!-- /tab-admin -->
