@@ -108,9 +108,11 @@ Firebase project — change it if you forked this for a different project.
 
 1. Create a new GitHub repo (public or private — Pages works with
    both on paid plans; public repos get Pages free).
-2. Push `index.html` to the root of the repo (the `firestore.rules`
-   and this `SETUP.md` don't need to be public-facing, but it's fine
-   to include them for your own records).
+2. Push the front-end to the root of the repo: `index.html`, `styles.css`,
+   and the `js/` folder (the app is plain ES modules — no build step, the
+   browser loads `js/app.js` and its imports directly). The
+   `firestore.rules` and this `SETUP.md` don't need to be public-facing,
+   but it's fine to include them for your own records.
 3. In the repo: **Settings → Pages → Source**, choose the `main`
    branch and `/ (root)` folder, then **Save**.
 4. GitHub gives you a URL like `https://yourusername.github.io/repo-name/`.
@@ -359,6 +361,27 @@ an ordinary win, and Scorecard simply can't register a hit.
 serves no CORS headers). The app reads that doc to show the fixtures
 rail, with live scores as games finish. `config/*` is already readable
 by any signed-in user, so no extra security rule is needed.
+
+## Front-end architecture
+
+The web app is plain ES modules (no bundler, no build step — the browser
+loads them straight from GitHub Pages), split by responsibility:
+
+- `index.html` — markup only.
+- `styles.css` — all styling.
+- `js/config.js` — Firebase + game config (teams, chips, thresholds, admin
+  email). This is the file you edit to tune the rules.
+- `js/firebase.js` — initialises Firebase once and re-exports the SDK
+  helpers, so the CDN version is pinned in one place.
+- `js/store.js` — shared mutable state; `store.reload()` re-fetches and
+  re-renders everything.
+- `js/scoring.js` — pure scoring/formatting logic (no DOM, no network).
+- `js/render.js` — all the view code + the pick/chip write actions.
+- `js/admin.js` — the two admin-only panels (result override, guest list).
+- `js/app.js` — the controller: auth wiring, `loadEverything()`, boot.
+
+Modules stay decoupled by talking through `store` rather than importing
+the controller (the view calls `store.reload()` after a write).
 
 ## Development, testing & CI
 
