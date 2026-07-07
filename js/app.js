@@ -10,15 +10,21 @@ import {
 } from "./firebase.js";
 import { ADMIN_EMAIL, UNLOCK_GAMEWEEK } from "./config.js";
 import { store } from "./store.js";
+import { multipickOutcomes } from "./scoring.js";
 import { setupAdminPanel, setupAccessPanel, renderAdminRecent, loadAllowlist } from "./admin.js";
 import {
   startDeadlineCountdown, renderPickPanel, renderSheet,
-  renderLeaderboard, renderHistory, renderFixtures,
+  renderLeaderboard, renderHistory, renderFixtures, renderRules,
 } from "./render.js";
+import { initTabs } from "./tabs.js";
 
 // View/admin code refreshes by calling store.reload() so it never has to
 // import this controller (which would be a cycle).
 store.reload = loadEverything;
+
+// One-time UI setup (the tab bar + the static Rules content).
+initTabs();
+renderRules();
 
 // --- Sign-in / sign-out / denial gate wiring --------------------------------
 document.getElementById("signin-btn").onclick = () => signInWithPopup(auth, provider).catch(e => alert(e.message));
@@ -69,8 +75,7 @@ onAuthStateChanged(auth, async (user) => {
     document.getElementById("whoami").textContent = `Signed in as ${user.displayName} (${user.email})`;
 
     if (user.email === ADMIN_EMAIL) {
-      document.getElementById("admin-card").style.display = "block";
-      document.getElementById("admin-access-card").style.display = "block";
+      document.getElementById("tab-btn-admin").style.display = "";
       setupAdminPanel();
       setupAccessPanel();
     }
@@ -143,23 +148,42 @@ async function loadEverything() {
   if (store.currentUser.email === ADMIN_EMAIL) renderAdminRecent(resultsDocs);
 
   store.myPicks = allPicks.filter(p => p.uid === store.currentUser.uid);
-  // A team only stays "used" if the pick actually resolved to a real
-  // match (win/draw/loss). If it came back as a forfeit (the picked
-  // team didn't end up playing that gameweek), the team is freed up
-  // again immediately rather than being wasted.
-  const myTeamsUsedSinceUnlock = new Set(
-    store.myPicks
-      .filter(p => p.gameweek < UNLOCK_GAMEWEEK && !(results[`${p.gameweek}_${p.team}`] || []).includes("forfeit"))
-      .map(p => p.team)
-  );
+  // The teams a pick occupies: two for a Multipick, otherwise one.
+  const teamsOf = p => (p.chip === "multipick" && p.team2 ? [p.team, p.team2] : [p.team]);
+
+  // Teams used in EARLIER weeks this half stay locked (no repeats until the
+  // GW20 reshuffle). A team whose fixture was forfeited (didn't play) is freed
+  // up again rather than wasted. The current week's own pick isn't "used".
+  const myTeamsUsedSinceUnlock = new Set();
+  store.myPicks.forEach(p => {
+    if (p.gameweek >= store.currentConfig.gameweek || p.gameweek >= UNLOCK_GAMEWEEK) return;
+    teamsOf(p).forEach(t => {
+      if (!(results[`${p.gameweek}_${t}`] || []).includes("forfeit")) myTeamsUsedSinceUnlock.add(t);
+    });
+  });
+
+  // Gameweeks where my pick actually played (a real win/draw/loss for at least
+  // one of its teams). Used to decide which chips have been "spent" this half
+  // -- a chip on a forfeited/unplayed week doesn't count and stays re-playable.
+  store.myPlayedGws = new Set();
+  store.myPicks.forEach(p => {
+    const outs = p.chip === "multipick"
+      ? multipickOutcomes(p.gameweek, p.team, p.team2, results)
+      : (results[`${p.gameweek}_${p.team}`] || []);
+    if (outs.some(o => o === "win" || o === "draw" || o === "loss")) store.myPlayedGws.add(p.gameweek);
+  });
+
   store.myPickThisWeek = store.myPicks.find(p => p.gameweek === store.currentConfig.gameweek) || null;
 
   // How many people picked each team that week -- drives the unique-pick
   // bonus. Computed once here and shared by the leaderboard and history.
+  // A Multipick backs both of its teams, so both count toward popularity.
   const popularity = {};
   allPicks.forEach(p => {
-    const key = `${p.gameweek}_${p.team}`;
-    popularity[key] = (popularity[key] || 0) + 1;
+    teamsOf(p).forEach(t => {
+      const key = `${p.gameweek}_${t}`;
+      popularity[key] = (popularity[key] || 0) + 1;
+    });
   });
 
   renderPickPanel(isOpen, myTeamsUsedSinceUnlock);

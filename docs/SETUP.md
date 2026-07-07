@@ -335,13 +335,22 @@ unique-pick bonus.
   the unique-pick bonus. In a double gameweek the prediction is judged
   against the team's **first** fixture only, not whichever one happens
   to fit.
+- **Multipick** — back **two** teams this week; if *either* wins you score a
+  flat win point (winning with both still scores just the one — it's a safety
+  net, not a doubler). The unique-pick bonus applies if the **winning** team is
+  unique, doubling the point. The catch: **both** teams are then used up for
+  the no-repeat rule, so you burn two of your teams for the safety.
+
+A chip played on a **forfeited** week (your team's match didn't happen)
+doesn't count — it isn't scored, isn't shown in the league-table Chips column,
+and isn't consumed from your once-per-half allowance, so you can play it again.
 
 Chips are stored as an optional `chip` field (`"double"`,
-`"doublechance"`, `"goalfest"`, or `"scorecard"`) on the pick document;
-Scorecard also stores a
-`scorecard: { for, against }` map. No security-rule change is needed.
-Scoring lives in one shared `scorePick()` function used by both the
-league table and the history view.
+`"doublechance"`, `"goalfest"`, `"scorecard"`, or `"multipick"`) on the pick
+document; Scorecard also stores a `scorecard: { for, against }` map, and
+Multipick stores its second team as `team2`. No security-rule change is
+needed. Scoring lives in shared `scorePick()` / `scoreMultipick()` functions
+used by both the league table and the history view.
 
 ## Goals (for the Goalfest & Scorecard chips)
 

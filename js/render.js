@@ -9,7 +9,7 @@ import {
 } from "./config.js";
 import { db, doc, getDoc, setDoc } from "./firebase.js";
 import { store } from "./store.js";
-import { scorePick, fmtCountdown, trailingStreak } from "./scoring.js";
+import { scorePick, scoreMultipick, multipickOutcomes, fmtCountdown, trailingStreak } from "./scoring.js";
 
 // Live-ticking countdown to the deadline. Flips the whole app to its
 // locked state (revealing picks) the moment it expires.
@@ -57,24 +57,33 @@ export function renderHistory(allPicks, results, goalsByKey, concededByKey, isOp
       .filter(gw => gw < store.currentConfig.gameweek || (gw === store.currentConfig.gameweek && !isOpen))
   );
   const sortedGws = Array.from(shown).sort((a, b) => a - b);
+  const histBtn = document.getElementById("tab-btn-history");
   if (sortedGws.length === 0) {
     card.style.display = "none";
+    if (histBtn) histBtn.style.display = "none";
     return;
   }
   card.style.display = "";
+  if (histBtn) histBtn.style.display = "";
 
   const renderWeek = (gw) => {
     const rows = allPicks
       .filter(p => p.gameweek === gw)
       .map(p => {
         const key = `${p.gameweek}_${p.team}`;
-        const outcomes = results[key] || [];
-        const { pts, bonus, scorecardHit } = scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
+        const isMulti = p.chip === "multipick";
+        const outcomes = isMulti
+          ? multipickOutcomes(p.gameweek, p.team, p.team2, results)
+          : (results[key] || []);
+        const { pts, bonus, scorecardHit } = isMulti
+          ? scoreMultipick(p.gameweek, p.team, p.team2, results, popularity)
+          : scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
         let label;
         if (outcomes.length === 0) label = "Pending";
         else if (outcomes.includes("forfeit")) label = "Forfeit";
         else label = outcomes.map(o => o[0].toUpperCase() + o.slice(1)).join(", ");
-        return { name: p.name, email: p.email, team: p.team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit };
+        const team = isMulti && p.team2 ? `${p.team} + ${p.team2}` : p.team;
+        return { name: p.name, email: p.email, team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit };
       })
       .sort((a, b) => b.pts - a.pts);
 
@@ -159,33 +168,40 @@ export function renderPickPanel(isOpen, usedTeams) {
     statusEl.textContent = "Choose a team below. You can change your mind anytime before kickoff of the first match.";
   }
 
+  const mp = store.myPickThisWeek;
+  const isMine = (team) => mp && (mp.team === team || (mp.chip === "multipick" && mp.team2 === team));
   TEAMS.forEach(team => {
     const locked = store.currentConfig.gameweek < UNLOCK_GAMEWEEK && usedTeams.has(team);
     const chip = document.createElement("button");
-    chip.className = "team-chip" + (locked ? " locked" : "") + (store.myPickThisWeek?.team === team ? " selected" : "");
+    chip.className = "team-chip" + (locked ? " locked" : "") + (isMine(team) ? " selected" : "");
     chip.innerHTML = `<span>${team}</span>` + (locked ? `<span class="lock-note">used</span>` : "");
     chip.disabled = locked || !isOpen;
     chip.onclick = () => submitPick(team);
     grid.appendChild(chip);
   });
 
-  renderChipRow(isOpen);
+  renderChipRow(isOpen, usedTeams);
 }
 
-function renderChipRow(isOpen) {
+function renderChipRow(isOpen, usedTeams) {
   const row = document.getElementById("chip-row");
   const half = halfOf(store.currentConfig.gameweek);
   const activeChip = store.myPickThisWeek?.chip || null;
-  // While the Scorecard entry form is open (clicked, but not yet played),
-  // show Scorecard as the highlighted chip. This is purely visual --
-  // nothing is saved and the "Chip set" message is left untouched until
-  // "Play Scorecard" is pressed.
-  const displayActive = store.scorecardEditing ? "scorecard" : activeChip;
+  // While a chip's entry form is open (clicked, but not yet played), show that
+  // chip as highlighted. Purely visual -- nothing is saved and the "Chip set"
+  // message is untouched until the form's play button is pressed.
+  const editingChip = store.scorecardEditing ? "scorecard"
+    : store.multipickEditing ? "multipick"
+    : null;
+  const displayActive = editingChip || activeChip;
 
-  // Which chips have I already spent in this half (on a different week)?
+  // Which chips have I already spent in this half (on a different week that
+  // actually played)? A chip on a forfeited/abandoned week doesn't count and
+  // stays re-playable, so only weeks in myPlayedGws consume the allowance.
   const spentThisHalf = {};
   store.myPicks.forEach(p => {
-    if (p.gameweek !== store.currentConfig.gameweek && halfOf(p.gameweek) === half && p.chip) {
+    if (p.gameweek !== store.currentConfig.gameweek && halfOf(p.gameweek) === half
+        && p.chip && store.myPlayedGws.has(p.gameweek)) {
       spentThisHalf[p.chip] = p.gameweek;
     }
   });
@@ -229,6 +245,27 @@ function renderChipRow(isOpen) {
       + `</div>`;
   }
 
+  // Multipick needs a second team. Show a dropdown of teams still available to
+  // you (excludes your first pick and any teams used in earlier weeks).
+  const showMultipick = (activeChip === "multipick" || store.multipickEditing) && store.myPickThisWeek && isOpen;
+  if (showMultipick) {
+    const teamA = store.myPickThisWeek.team;
+    const currentB = store.myPickThisWeek.chip === "multipick" ? store.myPickThisWeek.team2 : null;
+    const used = usedTeams || new Set();
+    const options = TEAMS.filter(t => t !== teamA && (!used.has(t) || t === currentB));
+    html += `<div class="scorecard-form">`
+      + `<span class="chip-label" style="margin:0;">Second team — you score if ${teamA} or this team wins</span>`;
+    if (options.length === 0) {
+      html += `<span class="chip-hint" style="margin:0;">No other teams available to pair with.</span>`;
+    } else {
+      html += `<select id="mp-team">`
+        + options.map(t => `<option value="${t}"${t === currentB ? " selected" : ""}>${t}</option>`).join("")
+        + `</select>`
+        + `<button class="chip-btn" id="mp-save">Play Multipick</button>`;
+    }
+    html += `</div>`;
+  }
+
   if (!store.myPickThisWeek) {
     html += `<span class="chip-hint">Pick a team first, then you can play a chip on it.</span>`;
   } else if (!isOpen) {
@@ -240,9 +277,12 @@ function renderChipRow(isOpen) {
     const id = btn.dataset.chip || null;
     if (id === "scorecard") {
       // Reveal the score-entry form rather than saving immediately.
-      btn.onclick = () => { store.scorecardEditing = true; renderChipRow(isOpen); };
+      btn.onclick = () => { store.scorecardEditing = true; store.multipickEditing = false; renderChipRow(isOpen, usedTeams); };
+    } else if (id === "multipick") {
+      // Reveal the second-team form rather than saving immediately.
+      btn.onclick = () => { store.multipickEditing = true; store.scorecardEditing = false; renderChipRow(isOpen, usedTeams); };
     } else {
-      btn.onclick = () => { store.scorecardEditing = false; setChip(id); };
+      btn.onclick = () => { store.scorecardEditing = false; store.multipickEditing = false; setChip(id); };
     }
   });
 
@@ -260,9 +300,23 @@ function renderChipRow(isOpen) {
       setChip("scorecard", { for: f, against: a });
     };
   }
+
+  const mpSave = document.getElementById("mp-save");
+  if (mpSave) {
+    mpSave.onclick = () => {
+      const t2 = document.getElementById("mp-team").value;
+      const msg = document.getElementById("pick-msg");
+      if (!t2) {
+        msg.textContent = "Choose a second team to play Multipick.";
+        msg.className = "msg error";
+        return;
+      }
+      setChip("multipick", null, t2);
+    };
+  }
 }
 
-async function setChip(chip, scorecard) {
+async function setChip(chip, scorecard, team2) {
   if (!store.myPickThisWeek) return;
   const msg = document.getElementById("pick-msg");
   msg.textContent = "Updating chip…";
@@ -277,13 +331,17 @@ async function setChip(chip, scorecard) {
   };
   if (chip) data.chip = chip;   // omitting the field clears the chip
   if (chip === "scorecard" && scorecard) data.scorecard = scorecard;
+  if (chip === "multipick" && team2) data.team2 = team2;
   try {
     await setDoc(doc(db, "picks", pickId), data);
     store.scorecardEditing = false;
+    store.multipickEditing = false;
     msg.textContent = chip
       ? (chip === "scorecard"
           ? `Scorecard set: ${scorecard.for}–${scorecard.against}`
-          : `Chip set: ${CHIPS[chip].label}`)
+          : chip === "multipick"
+            ? `Multipick set: ${store.myPickThisWeek.team} + ${team2}`
+            : `Chip set: ${CHIPS[chip].label}`)
       : "Chip cleared.";
     msg.className = "msg ok";
     await store.reload();
@@ -305,11 +363,15 @@ async function submitPick(team) {
     team,
     gameweek: store.currentConfig.gameweek,
   };
-  // Changing your team keeps any chip (and Scorecard prediction) you'd
-  // already played this week.
+  // Changing your team keeps any chip (and its Scorecard prediction /
+  // Multipick second team) you'd already played this week.
   if (store.myPickThisWeek?.chip) data.chip = store.myPickThisWeek.chip;
   if (store.myPickThisWeek?.chip === "scorecard" && store.myPickThisWeek.scorecard) {
     data.scorecard = store.myPickThisWeek.scorecard;
+  }
+  if (store.myPickThisWeek?.chip === "multipick" && store.myPickThisWeek.team2
+      && store.myPickThisWeek.team2 !== team) {
+    data.team2 = store.myPickThisWeek.team2;
   }
   try {
     await setDoc(doc(db, "picks", pickId), data);
@@ -336,8 +398,9 @@ export function renderSheet(weekPicks, isOpen) {
   weekPicks.forEach((p, i) => {
     const row = document.createElement("div");
     row.className = "pick-tile";
+    const team = p.chip === "multipick" && p.team2 ? `${p.team} + ${p.team2}` : p.team;
     row.innerHTML = `<span class="pick-num">${i + 1}</span>`
-      + `<span>${p.name} &mdash; <strong>${p.team}</strong>${chipTag(p.chip, p.scorecard)}</span>`;
+      + `<span>${p.name} &mdash; <strong>${team}</strong>${chipTag(p.chip, p.scorecard)}</span>`;
     el.appendChild(row);
   });
 }
@@ -346,8 +409,13 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
   const totals = {}; // email -> {name, points, played, won, form:[{gw,letter}]}
   allPicks.forEach(p => {
     const key = `${p.gameweek}_${p.team}`;
-    const outcomes = results[key] || [];
-    const { pts, wins, chipPts, bonusPts } = scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
+    const isMulti = p.chip === "multipick";
+    const outcomes = isMulti
+      ? multipickOutcomes(p.gameweek, p.team, p.team2, results)
+      : (results[key] || []);
+    const { pts, wins, chipPts, bonusPts } = isMulti
+      ? scoreMultipick(p.gameweek, p.team, p.team2, results, popularity)
+      : scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
     // A gameweek counts as "played" once the pick has a real result
     // (win/draw/loss). A forfeit means the team didn't play, so it
     // neither counts as played nor as a scoring week.
@@ -358,7 +426,9 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
     t.points += pts;
     t.chipPts += chipPts;
     t.bonusPts += bonusPts;
-    if (p.chip && CHIPS[p.chip]) t.chips.push({ gw: p.gameweek, chip: p.chip });
+    // Only count a chip once its week has actually played -- an unscored or
+    // forfeited week doesn't count (and, elsewhere, doesn't consume the chip).
+    if (didPlay && p.chip && CHIPS[p.chip]) t.chips.push({ gw: p.gameweek, chip: p.chip });
     if (didPlay) t.played += 1;
     if (wins > 0) t.won += 1;
 
@@ -417,5 +487,15 @@ function renderForm(form) {
   if (!form.length) return `<span class="empty" style="font-size:0.7rem;">–</span>`;
   return form.slice(-5)
     .map(f => `<span class="form-dot form-${f.letter}" title="GW${f.gw}: ${f.letter}">${f.letter}</span>`)
+    .join("");
+}
+
+// Fill the Rules tab's chip list straight from CHIPS, so it can never drift
+// from the actual game. The prose alongside it lives in index.html.
+export function renderRules() {
+  const el = document.getElementById("rules-chips");
+  if (!el) return;
+  el.innerHTML = Object.entries(CHIPS)
+    .map(([id, meta]) => `<p class="chip-desc"><span class="chip-tag chip-${id}">${meta.label}</span> ${meta.desc}</p>`)
     .join("");
 }

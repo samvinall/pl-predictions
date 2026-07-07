@@ -68,6 +68,48 @@ export function scorePick(outcomes, goals, conceded, chip, scorecard, popCount) 
   return { pts, bonus, bonusPts, chipPts, wins: trueWins, scorecardHit };
 }
 
+// Multipick: two teams this week, best-of. A win by EITHER team scores a flat
+// win point (never doubled by having two winners — it's a safety net). The
+// unique-pick bonus applies if a WINNING team is unique. Returns the same
+// shape as scorePick so the leaderboard/history can treat them uniformly; the
+// flat win point is attributed to the chip (chipPts), matching how a Multipick
+// win is "earned" by the chip.
+export function scoreMultipick(gameweek, teamA, teamB, results, popularity) {
+  const outA = results[`${gameweek}_${teamA}`] || [];
+  const outB = teamB ? (results[`${gameweek}_${teamB}`] || []) : [];
+  const wonTeams = [];
+  if (outA.includes("win")) wonTeams.push(teamA);
+  if (outB.includes("win")) wonTeams.push(teamB);
+
+  const base = wonTeams.length > 0 ? WIN_POINTS : 0;   // flat, capped at one
+  const isUnique = wonTeams.some(t => (popularity[`${gameweek}_${t}`] || 0) <= UNIQUE_THRESHOLD);
+  const bonusPts = (base > 0 && isUnique) ? base * (BONUS_MULTIPLIER - 1) : 0;
+
+  return {
+    pts: base + bonusPts,
+    bonus: base > 0 && isUnique,
+    bonusPts,
+    chipPts: base,                 // the win point is attributed to the chip
+    wins: wonTeams.length > 0 ? 1 : 0,
+    scorecardHit: false,
+  };
+}
+
+// A single representative outcome for a Multipick week (best of the two teams:
+// win > draw > loss > forfeit), used for the "played"/form/label displays.
+// Returns [] if neither team has a result yet.
+export function multipickOutcomes(gameweek, teamA, teamB, results) {
+  const outs = [teamA, teamB]
+    .filter(Boolean)
+    .flatMap(t => results[`${gameweek}_${t}`] || []);
+  if (outs.length === 0) return [];
+  const best = outs.includes("win") ? "win"
+    : outs.includes("draw") ? "draw"
+    : outs.includes("loss") ? "loss"
+    : "forfeit";
+  return [best];
+}
+
 export function fmtCountdown(ms) {
   const s = Math.floor(ms / 1000);
   const d = Math.floor(s / 86400);
