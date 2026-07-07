@@ -14,7 +14,7 @@ import { multipickOutcomes } from "./scoring.js";
 import { setupAdminPanel, setupAccessPanel, renderAdminRecent, loadAllowlist } from "./admin.js";
 import {
   startDeadlineCountdown, renderPickPanel, renderSheet,
-  renderLeaderboard, renderHistory, renderFixtures, renderRules,
+  renderLeaderboard, renderHistory, renderFixtures, renderThisWeek, renderRules,
 } from "./render.js";
 import { initTabs } from "./tabs.js";
 
@@ -186,9 +186,18 @@ async function loadEverything() {
     });
   });
 
+  // Fetch the mirrored fixtures once and share between the fixtures rail and
+  // the "This Week" tab (both need this gameweek's fixtures + live scores).
+  let fixturesData = null;
+  try {
+    const fxSnap = await getDoc(doc(db, "config", "fixtures"));
+    if (fxSnap.exists()) fixturesData = fxSnap.data();
+  } catch (e) { /* leave null -> "not published yet" */ }
+
   renderPickPanel(isOpen, myTeamsUsedSinceUnlock);
+  renderThisWeek(fixturesData);
   renderSheet(allPicks.filter(p => p.gameweek === store.currentConfig.gameweek), isOpen);
   renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity);
   renderHistory(allPicks, results, goalsByKey, concededByKey, isOpen, popularity);
-  renderFixtures();
+  renderFixtures(fixturesData);
 }

@@ -7,7 +7,7 @@
 import {
   TEAMS, CHIPS, UNLOCK_GAMEWEEK, BONUS_MULTIPLIER, SCORECARD_BONUS, halfOf,
 } from "./config.js";
-import { db, doc, getDoc, setDoc } from "./firebase.js";
+import { db, doc, setDoc } from "./firebase.js";
 import { store } from "./store.js";
 import { scorePick, scoreMultipick, multipickOutcomes, fmtCountdown, trailingStreak } from "./scoring.js";
 
@@ -40,6 +40,18 @@ const chipTag = (chip, scorecard) => {
   if (chip === "scorecard" && scorecard) label += ` ${scorecard.for}–${scorecard.against}`;
   return `<span class="chip-tag chip-${chip}">${label}</span>`;
 };
+
+// Format a team's outcomes with their scorelines, e.g. "Win 2–1" or, for a
+// double gameweek, "Win 2–1, Loss 0–3". Forfeits and unknown scores show the
+// bare result. Empty -> "Pending".
+function fmtResult(outcomes, goals, conceded) {
+  if (!outcomes || outcomes.length === 0) return "Pending";
+  const g = goals || [], c = conceded || [];
+  return outcomes.map((o, i) => {
+    const cap = o[0].toUpperCase() + o.slice(1);
+    return (o !== "forfeit" && g[i] != null && c[i] != null) ? `${cap} ${g[i]}–${c[i]}` : cap;
+  }).join(", ");
+}
 
 // Per-gameweek look-back. Everyone's past picks are already loaded (the
 // rules allow reading picks from earlier gameweeks, and the current one
@@ -78,10 +90,16 @@ export function renderHistory(allPicks, results, goalsByKey, concededByKey, isOp
         const { pts, bonus, scorecardHit } = isMulti
           ? scoreMultipick(p.gameweek, p.team, p.team2, results, popularity)
           : scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
+        // Show the actual scoreline of the picked team's match. For a
+        // Multipick, show each team's result so both matches are visible.
         let label;
-        if (outcomes.length === 0) label = "Pending";
-        else if (outcomes.includes("forfeit")) label = "Forfeit";
-        else label = outcomes.map(o => o[0].toUpperCase() + o.slice(1)).join(", ");
+        if (isMulti) {
+          label = [p.team, p.team2].filter(Boolean)
+            .map(t => `${t}: ${fmtResult(results[`${p.gameweek}_${t}`], goalsByKey[`${p.gameweek}_${t}`], concededByKey[`${p.gameweek}_${t}`])}`)
+            .join(" · ");
+        } else {
+          label = fmtResult(outcomes, goalsByKey[key], concededByKey[key]);
+        }
         const team = isMulti && p.team2 ? `${p.team} + ${p.team2}` : p.team;
         return { name: p.name, email: p.email, team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit };
       })
@@ -109,22 +127,16 @@ export function renderHistory(allPicks, results, goalsByKey, concededByKey, isOp
 // Fixtures are mirrored into config/fixtures by advance_gameweek.py
 // (the FPL API can't be reached from the browser -- no CORS headers),
 // and refreshed on the same schedule so scores update as games finish.
-export async function renderFixtures() {
+// The doc is fetched once in loadEverything and passed in here (and to
+// renderThisWeek), so the two views share a single read.
+export function renderFixtures(data) {
   const titleEl = document.getElementById("fixtures-title");
   const el = document.getElementById("fixtures-list");
   titleEl.textContent = `GW${store.currentConfig.gameweek} Fixtures`;
-  let snap;
-  try {
-    snap = await getDoc(doc(db, "config", "fixtures"));
-  } catch (e) {
-    el.innerHTML = `<p class="empty">Couldn't load fixtures.</p>`;
-    return;
-  }
-  if (!snap.exists()) {
+  if (!data) {
     el.innerHTML = `<p class="empty">Fixtures not published yet.</p>`;
     return;
   }
-  const data = snap.data();
   const list = data.fixtures || [];
   if (list.length === 0) {
     el.innerHTML = `<p class="empty">No fixtures listed for this gameweek.</p>`;
@@ -153,6 +165,51 @@ export async function renderFixtures() {
   }).join("");
 }
 
+// The "This Week" tab's top card: your current pick (both teams for a
+// Multipick) with each one's fixture — opponent, kickoff, or live/final
+// score — pulled from the same fixtures doc renderFixtures uses.
+export function renderThisWeek(fixturesData) {
+  const el = document.getElementById("thisweek-mypick");
+  if (!el) return;
+  const gw = store.currentConfig.gameweek;
+  const mp = store.myPickThisWeek;
+  if (!mp) {
+    el.innerHTML = `<p class="empty">You haven't picked for GW${gw} yet — head to the Pick tab.</p>`;
+    return;
+  }
+  const teams = mp.chip === "multipick" && mp.team2 ? [mp.team, mp.team2] : [mp.team];
+  const fixtures = (fixturesData && fixturesData.gameweek === gw && Array.isArray(fixturesData.fixtures))
+    ? fixturesData.fixtures : [];
+
+  const lines = teams.map(team => {
+    const fx = fixtures.find(f => f.home === team || f.away === team);
+    let meta;
+    if (!fx) {
+      meta = `fixture TBC`;
+    } else {
+      const opp = fx.home === team ? fx.away : fx.home;
+      const loc = fx.home === team ? "vs" : "away to";
+      let m;
+      if ((fx.started || fx.finished) && fx.home_score != null && fx.away_score != null) {
+        const yours = fx.home === team ? fx.home_score : fx.away_score;
+        const theirs = fx.home === team ? fx.away_score : fx.home_score;
+        const cls = fx.finished ? "fx-score" : "fx-score fx-live";
+        m = `<span class="${cls}">${yours}–${theirs}</span> ${fx.finished ? "FT" : "live"}`;
+      } else if (fx.kickoff) {
+        const d = fx.kickoff.toDate();
+        m = `${d.toLocaleDateString([], { weekday: "short" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      } else {
+        m = "TBC";
+      }
+      meta = `${loc} ${opp} · ${m}`;
+    }
+    return `<div class="fixture"><span class="fx-match"><strong>${team}</strong></span><span class="fx-meta">${meta}</span></div>`;
+  }).join("");
+
+  const chip = mp.chip && CHIPS[mp.chip] ? ` ${chipTag(mp.chip, mp.scorecard)}` : "";
+  el.innerHTML = `<p class="eyebrow" style="margin-bottom:0.4rem;">GW${gw} — your bet${chip}</p>${lines}`;
+}
+
 export function renderPickPanel(isOpen, usedTeams) {
   const grid = document.getElementById("team-grid");
   const statusEl = document.getElementById("pick-status");
@@ -165,7 +222,7 @@ export function renderPickPanel(isOpen, usedTeams) {
   } else if (!isOpen) {
     statusEl.textContent = "Picking window has closed for this gameweek.";
   } else {
-    statusEl.textContent = "Choose a team below. You can change your mind anytime before kickoff of the first match.";
+    statusEl.textContent = "Pick a team you think will win — change it anytime before kickoff of the first match.";
   }
 
   const mp = store.myPickThisWeek;

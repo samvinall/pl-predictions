@@ -22,7 +22,7 @@
 
   <div id="signin-gate">
     <p class="eyebrow">Team sheet locked</p>
-    <p>Sign in with Google to pick your team for this gameweek. One team per week, changeable anytime up to kickoff — no repeats until the reshuffle at gameweek 20.</p>
+    <p>Sign in with Google, then each gameweek <strong>pick one team you think will win their match</strong>. A win scores a point (doubled if you're the only one to back them). One team per week, changeable up to kickoff — and no repeats until the reshuffle at gameweek 20.</p>
     <button id="signin-btn">Sign in with Google</button>
   </div>
 
@@ -47,6 +47,7 @@
 
     <nav class="tab-nav" id="tab-nav" role="tablist">
       <button class="tab-btn" data-tab="pick" role="tab">Pick</button>
+      <button class="tab-btn" data-tab="thisweek" role="tab">This Week</button>
       <button class="tab-btn" data-tab="table" role="tab">Table</button>
       <button class="tab-btn" data-tab="history" id="tab-btn-history" role="tab" style="display:none;">History</button>
       <button class="tab-btn" data-tab="rules" role="tab">Rules</button>
@@ -59,6 +60,7 @@
       <div class="col-main">
         <div class="card" id="pick-card">
           <h2>Your Pick</h2>
+          <p class="pick-intro">Choose <strong>one team you think will win their match</strong> this gameweek. A win scores 1 point — doubled if you're the only one who picked them. You can't reuse a team until the gameweek 20 reshuffle.</p>
           <p class="eyebrow" id="pick-status"></p>
           <div class="team-grid" id="team-grid"></div>
           <div class="chip-row" id="chip-row"></div>
@@ -74,13 +76,21 @@
       </div><!-- /layout -->
     </section>
 
-    <!-- TABLE -->
-    <section id="tab-table" class="tab-panel" role="tabpanel">
+    <!-- THIS WEEK -->
+    <section id="tab-thisweek" class="tab-panel" role="tabpanel">
+      <div class="card">
+        <h2>Your Bet This Week</h2>
+        <div id="thisweek-mypick"></div>
+      </div>
+
       <div class="card">
         <h2>This Gameweek's Sheet</h2>
         <div id="sheet-list"></div>
       </div>
+    </section>
 
+    <!-- TABLE -->
+    <section id="tab-table" class="tab-panel" role="tabpanel">
       <div class="card">
         <h2>League Table</h2>
         <div class="table-scroll">
