@@ -371,6 +371,43 @@ serves no CORS headers). The app reads that doc to show the fixtures
 rail, with live scores as games finish. `config/*` is already readable
 by any signed-in user, so no extra security rule is needed.
 
+## Custom display names
+
+Each player can set a display name on the **This Week** tab (overrides their
+Google account name everywhere — sheet, table, history). The admin can also
+override any name from the **Admin** tab. Names live in `profiles/{uid}` and
+are resolved at render time, so a change applies retroactively to past
+gameweeks too.
+
+## Season predictions (Golden Boot & champion)
+
+A **Season** tab lets each player predict, once, before the transfer window
+shuts:
+
+- **Golden Boot** — the season's top scorer, chosen from a type-to-search list
+  of every PL player. Worth **10 pts**, doubled to **20** if you're the only
+  one to pick that player.
+- **Champion** (optional) — worth **5 pts**, doubled to **10** if unique.
+
+Mechanics:
+
+- **Lock:** you set the deadline (the transfer-window close) once in
+  **Admin → Season Predictions** — a date/time picker writing
+  `config/season.predictionsDeadline`. Picks are changeable until then, and
+  hidden from other players until then (enforced by `firestore.rules`), same as
+  weekly picks.
+- **The Season tab also shows** the live PL top 4 and current top
+  scorers/assists, mirrored by `advance_gameweek.py` into `config/standings`
+  (computed from the season's finished fixtures + the FPL player stats). The
+  player list is mirrored into `config/players`.
+- **Resolution:** at season end, set the actual Golden Boot winner and champion
+  in **Admin → Season Predictions**. Correct predictions get their bonus added
+  to the league table (shown as a ⭐ tag by the player's name).
+
+Data lives in `season_picks/{uid}` (one per player) and `config/season*` docs;
+the only new security rule is for `season_picks` (own is always readable/
+writable pre-deadline; everyone's readable once it locks).
+
 ## Front-end architecture
 
 The web app is plain ES modules (no bundler, no build step — the browser

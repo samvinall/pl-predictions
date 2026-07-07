@@ -20,6 +20,11 @@ export const UNIQUE_THRESHOLD = 1;      // "picked by <= this many people" gets 
 export const BONUS_MULTIPLIER = 2;
 export const WIN_POINTS = 1;
 
+// Season-long (GW0) predictions, scored once at season end. Each doubles (via
+// BONUS_MULTIPLIER) if you're the only one to get it right.
+export const GOLDEN_BOOT_BONUS = 10;
+export const CHAMPION_BONUS = 5;
+
 // Chips: at most one per week, and each chip can be played once per
 // half-season (the two halves split at the GW20 reshuffle). Chip
 // effects STACK with the unique-pick bonus above.

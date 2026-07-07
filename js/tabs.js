@@ -3,6 +3,8 @@
 // matching panels (`#tab-<id>`). Hidden buttons (History/Admin, revealed
 // elsewhere) are just skipped. Arrow keys move between tabs.
 // ---------------------------------------------------------------------------
+import { store } from "./store.js";
+
 export function initTabs() {
   const nav = document.getElementById("tab-nav");
   if (!nav) return;
@@ -34,5 +36,6 @@ export function initTabs() {
     e.preventDefault();
   });
 
+  store.selectTab = select;   // let other modules jump to a tab (e.g. the season nudge)
   select("pick");   // default tab
 }

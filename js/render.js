@@ -5,7 +5,8 @@
 // store.reload() after a write, so it never imports the controller directly.
 // ---------------------------------------------------------------------------
 import {
-  TEAMS, CHIPS, UNLOCK_GAMEWEEK, BONUS_MULTIPLIER, SCORECARD_BONUS, halfOf,
+  TEAMS, CHIPS, UNLOCK_GAMEWEEK, BONUS_MULTIPLIER, SCORECARD_BONUS,
+  GOLDEN_BOOT_BONUS, CHAMPION_BONUS, UNIQUE_THRESHOLD, halfOf,
 } from "./config.js";
 import { db, doc, setDoc } from "./firebase.js";
 import { store } from "./store.js";
@@ -463,7 +464,7 @@ export function renderSheet(weekPicks, isOpen) {
   });
 }
 
-export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity) {
+export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity, seasonPicks, seasonResults) {
   const totals = {}; // email -> {name, points, played, won, form:[{gw,letter}]}
   allPicks.forEach(p => {
     const key = `${p.gameweek}_${p.team}`;
@@ -500,6 +501,28 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
     if (letter) t.form.push({ gw: p.gameweek, letter });
   });
 
+  // Season-long prediction bonuses, added once the admin sets the results.
+  // Each doubles if you were the only one (<= threshold) to get it right.
+  if (seasonResults && seasonPicks && seasonPicks.length) {
+    const gbCount = {}, chCount = {};
+    seasonPicks.forEach(sp => {
+      if (sp.goldenBootId != null) gbCount[sp.goldenBootId] = (gbCount[sp.goldenBootId] || 0) + 1;
+      if (sp.champion) chCount[sp.champion] = (chCount[sp.champion] || 0) + 1;
+    });
+    seasonPicks.forEach(sp => {
+      const t = totals[sp.email];
+      if (!t) return;
+      let add = 0;
+      if (seasonResults.goldenBootId != null && sp.goldenBootId === seasonResults.goldenBootId) {
+        add += GOLDEN_BOOT_BONUS * (gbCount[sp.goldenBootId] <= UNIQUE_THRESHOLD ? BONUS_MULTIPLIER : 1);
+      }
+      if (seasonResults.champion && sp.champion === seasonResults.champion) {
+        add += CHAMPION_BONUS * (chCount[sp.champion] <= UNIQUE_THRESHOLD ? BONUS_MULTIPLIER : 1);
+      }
+      if (add) { t.points += add; t.seasonPts = (t.seasonPts || 0) + add; }
+    });
+  }
+
   Object.values(totals).forEach(t => t.form.sort((a, b) => a.gw - b.gw));
 
   const ppw = v => (v.played ? v.points / v.played : 0);
@@ -524,6 +547,7 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
     const crown = i === 0 && r.points > 0 ? ` <span class="crown" title="Top of the table">👑</span>` : "";
     const flame = wStreak >= 2 ? ` <span class="streak" title="${wStreak} winning weeks in a row">🔥${wStreak}</span>` : "";
     const ice = wStreak === 0 && cStreak >= 3 ? ` <span class="streak" title="${cStreak} weeks without a win">🧊</span>` : "";
+    const seasonTag = r.seasonPts ? ` <span class="streak" title="Season prediction bonus">⭐${r.seasonPts}</span>` : "";
     // Chips played: a count, with the specific chips + gameweeks on hover.
     const chipsTitle = r.chips
       .sort((a, b) => a.gw - b.gw)
@@ -531,7 +555,7 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
       .join(", ");
     const chipsCell = r.chips.length ? `<span title="${chipsTitle}">${r.chips.length}</span>` : "–";
     tr.innerHTML = `<td class="rank rank-${i + 1}">${i + 1}</td>`
-      + `<td>${r.name}${crown}${flame}${ice}</td>`
+      + `<td>${r.name}${crown}${flame}${ice}${seasonTag}</td>`
       + `<td>${r.played}</td><td>${r.won}</td>`
       + `<td class="form-cell">${renderForm(r.form)}</td>`
       + `<td>${perWeek}</td>`
