@@ -18,6 +18,7 @@
     --line:#CFC7AC;
     --muted:#726C58;
     --red:#A9382C;
+    --teal:#2E6E6A;
     --radius:10px;
   }
   *{box-sizing:border-box;}
@@ -275,6 +276,7 @@
     text-transform:uppercase; letter-spacing:0.04em; vertical-align:middle; font-family:'JetBrains Mono', monospace;
   }
   .chip-double{ background:var(--pitch); color:var(--paper); }
+  .chip-doublechance{ background:var(--teal); color:var(--paper); }
   .chip-goalfest{ background:var(--gold); color:var(--pitch-dark); }
   .chip-scorecard{ background:var(--pitch-dark); color:var(--paper); }
   .scorecard-form{
@@ -361,7 +363,7 @@
       <div class="table-scroll">
         <table>
           <thead>
-            <tr><th></th><th>Player</th><th>Pld</th><th>Won</th><th>Form</th><th>PPW</th><th>Pts</th></tr>
+            <tr><th></th><th>Player</th><th>Pld</th><th>Won</th><th>Form</th><th>PPW</th><th title="Chips played">Chips</th><th title="Points earned from chips (Double Down, Double Chance, Goalfest, Scorecard)">Chip pts</th><th title="Points earned from the unique-pick bonus">Bonus pts</th><th>Pts</th></tr>
           </thead>
           <tbody id="leaderboard-body"></tbody>
         </table>
@@ -489,17 +491,20 @@
   // Chips: at most one per week, and each chip can be played once per
   // half-season (the two halves split at the GW20 reshuffle). Chip
   // effects STACK with the unique-pick bonus above.
-  //   double    -> doubles the week's win points
-  //   goalfest  -> if your team wins, you score the goals it scored that
-  //                fixture instead of the flat win point (falls back to a
-  //                normal win if goals aren't known)
-  //   scorecard -> predict the exact scoreline; nail it for a flat bonus,
-  //                regardless of whether the team won
+  //   double       -> doubles the week's win points
+  //   doublechance -> a draw scores the same as a win this week (your team
+  //                   only needs to avoid defeat)
+  //   goalfest     -> if your team wins, you score the goals it scored that
+  //                   fixture instead of the flat win point (falls back to a
+  //                   normal win if goals aren't known)
+  //   scorecard    -> predict the exact scoreline; nail it for a flat bonus,
+  //                   regardless of whether the team won
   const SCORECARD_BONUS = 5;
   const CHIPS = {
-    double:    { label: "Double Down", desc: "Doubles the points you score this week. Stacks on top of the unique-pick bonus." },
-    goalfest:  { label: "Goalfest",    desc: "If your team wins, you score the number of goals it scored that match instead of the flat 1 point (goals from both fixtures in a double gameweek)." },
-    scorecard: { label: "Scorecard",   desc: `Predict your team's exact scoreline. Nail it for a flat +${SCORECARD_BONUS} — even on a draw or loss. Judged on the first fixture in a double gameweek.` },
+    double:       { label: "Double Down",   desc: "Doubles the points you score this week. Stacks on top of the unique-pick bonus." },
+    doublechance: { label: "Double Chance", desc: "Your team only needs to avoid defeat — a draw scores the same as a win this week (both fixtures in a double gameweek)." },
+    goalfest:     { label: "Goalfest",      desc: "If your team wins, you score the number of goals it scored that match instead of the flat 1 point (goals from both fixtures in a double gameweek)." },
+    scorecard:    { label: "Scorecard",     desc: `Predict your team's exact scoreline. Nail it for a flat +${SCORECARD_BONUS} — even on a draw or loss. Judged on the first fixture in a double gameweek.` },
   };
   const halfOf = gw => (gw < UNLOCK_GAMEWEEK ? 1 : 2);
 
@@ -713,33 +718,49 @@
   // one pick's outcomes, the goals the team scored and conceded (both
   // aligned to outcomes), the chip played, its scorecard prediction (if
   // any), and how many people picked that team that week (unique bonus).
-  // Returns { pts, bonus, wins, scorecardHit }.
+  // Returns { pts, bonus, bonusPts, chipPts, wins, scorecardHit }, where
+  // pts = raw win points + chipPts + bonusPts, so the leaderboard can show
+  // how much of a total came from chips vs. the unique-pick bonus.
   function scorePick(outcomes, goals, conceded, chip, scorecard, popCount) {
     outcomes = outcomes || [];
-    const winIdx = [];
-    outcomes.forEach((o, i) => { if (o === "win") winIdx.push(i); });
+    // Fixtures that earn points this week. A win always does; Double Chance
+    // also lets a draw earn the flat win points. `trueWins` stays a count of
+    // actual wins only, so the "Won" column and form letters never treat a
+    // Double Chance draw as a win.
+    const scoringIdx = [];
+    let trueWins = 0;
+    outcomes.forEach((o, i) => {
+      if (o === "win") { scoringIdx.push(i); trueWins++; }
+      else if (o === "draw" && chip === "doublechance") { scoringIdx.push(i); }
+    });
 
-    let pts;
+    // `raw` is what a plain no-chip pick scores (wins only). `base` is the
+    // pre-unique-bonus score *including* the chip effect; base - raw is the
+    // chip's contribution.
+    const raw = trueWins * WIN_POINTS;
+    let base;
     if (chip === "goalfest") {
       const g = Array.isArray(goals) && goals.length === outcomes.length ? goals : null;
       // Sum the goals scored in each winning fixture. If goals aren't
       // recorded, fall back to scoring it as an ordinary win.
-      pts = g ? winIdx.reduce((sum, i) => sum + (Number(g[i]) || 0), 0)
-              : winIdx.length * WIN_POINTS;
+      base = g ? scoringIdx.reduce((sum, i) => sum + (Number(g[i]) || 0), 0)
+               : scoringIdx.length * WIN_POINTS;
     } else {
-      pts = winIdx.length * WIN_POINTS;
-      if (chip === "double") pts *= 2;
+      base = scoringIdx.length * WIN_POINTS;
+      if (chip === "double") base *= 2;
     }
-    // Chips stack with the unique-pick bonus (chosen house rule).
-    const bonus = pts > 0 && popCount <= UNIQUE_THRESHOLD;
-    if (bonus) pts *= BONUS_MULTIPLIER;
+
+    // The unique-pick bonus multiplies the whole (chip-adjusted) base, and
+    // stacks with chips (chosen house rule). bonusPts is the extra it adds.
+    const bonus = base > 0 && popCount <= UNIQUE_THRESHOLD;
+    const bonusPts = bonus ? base * (BONUS_MULTIPLIER - 1) : 0;
 
     // Scorecard: a flat bonus for calling the exact scoreline of the
     // team's fixture -- independent of the result (you can nail a losing
     // scoreline) and NOT multiplied by the unique bonus. The prediction
     // is tied to the gameweek's first fixture (index 0); in a double
     // gameweek it must match that specific game, not whichever one fits.
-    let scorecardHit = false;
+    let scorecardHit = false, scorecardFlat = 0;
     if (chip === "scorecard" && scorecard
         && Array.isArray(goals) && goals.length === outcomes.length
         && Array.isArray(conceded) && conceded.length === outcomes.length
@@ -747,9 +768,14 @@
       scorecardHit =
         Number(goals[0]) === Number(scorecard.for) &&
         Number(conceded[0]) === Number(scorecard.against);
-      if (scorecardHit) pts += SCORECARD_BONUS;
+      if (scorecardHit) scorecardFlat = SCORECARD_BONUS;
     }
-    return { pts, bonus, wins: winIdx.length, scorecardHit };
+
+    const pts = base + bonusPts + scorecardFlat;
+    // The Scorecard flat bonus is itself a chip effect, so it counts as chip
+    // points alongside the double/goalfest/double-chance contribution.
+    const chipPts = (base - raw) + scorecardFlat;
+    return { pts, bonus, bonusPts, chipPts, wins: trueWins, scorecardHit };
   }
 
   // Small tag shown next to a pick. For Scorecard it also shows the
@@ -1217,15 +1243,18 @@
     allPicks.forEach(p => {
       const key = `${p.gameweek}_${p.team}`;
       const outcomes = results[key] || [];
-      const { pts, wins } = scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
+      const { pts, wins, chipPts, bonusPts } = scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
       // A gameweek counts as "played" once the pick has a real result
       // (win/draw/loss). A forfeit means the team didn't play, so it
       // neither counts as played nor as a scoring week.
       const didPlay = outcomes.some(o => o === "win" || o === "draw" || o === "loss");
 
-      if (!totals[p.email]) totals[p.email] = { name: p.name, points: 0, played: 0, won: 0, form: [] };
+      if (!totals[p.email]) totals[p.email] = { name: p.name, points: 0, played: 0, won: 0, form: [], chips: [], chipPts: 0, bonusPts: 0 };
       const t = totals[p.email];
       t.points += pts;
+      t.chipPts += chipPts;
+      t.bonusPts += bonusPts;
+      if (p.chip && CHIPS[p.chip]) t.chips.push({ gw: p.gameweek, chip: p.chip });
       if (didPlay) t.played += 1;
       if (wins > 0) t.won += 1;
 
@@ -1251,7 +1280,7 @@
     const body = document.getElementById("leaderboard-body");
     body.innerHTML = "";
     if (rows.length === 0) {
-      body.innerHTML = `<tr><td colspan="7" class="empty">No scored picks yet.</td></tr>`;
+      body.innerHTML = `<tr><td colspan="10" class="empty">No scored picks yet.</td></tr>`;
       return;
     }
     rows.forEach((r, i) => {
@@ -1263,11 +1292,19 @@
       const crown = i === 0 && r.points > 0 ? ` <span class="crown" title="Top of the table">👑</span>` : "";
       const flame = wStreak >= 2 ? ` <span class="streak" title="${wStreak} winning weeks in a row">🔥${wStreak}</span>` : "";
       const ice = wStreak === 0 && cStreak >= 3 ? ` <span class="streak" title="${cStreak} weeks without a win">🧊</span>` : "";
+      // Chips played: a count, with the specific chips + gameweeks on hover.
+      const chipsTitle = r.chips
+        .sort((a, b) => a.gw - b.gw)
+        .map(c => `GW${c.gw} ${CHIPS[c.chip].label}`)
+        .join(", ");
+      const chipsCell = r.chips.length ? `<span title="${chipsTitle}">${r.chips.length}</span>` : "–";
       tr.innerHTML = `<td class="rank rank-${i + 1}">${i + 1}</td>`
         + `<td>${r.name}${crown}${flame}${ice}</td>`
         + `<td>${r.played}</td><td>${r.won}</td>`
         + `<td class="form-cell">${renderForm(r.form)}</td>`
-        + `<td>${perWeek}</td><td><strong>${r.points}</strong></td>`;
+        + `<td>${perWeek}</td>`
+        + `<td>${chipsCell}</td><td>${r.chipPts || "–"}</td><td>${r.bonusPts || "–"}</td>`
+        + `<td><strong>${r.points}</strong></td>`;
       body.appendChild(tr);
     });
   }

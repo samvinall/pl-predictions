@@ -105,6 +105,15 @@ FPL_FIXTURES = "https://fantasy.premierleague.com/api/fixtures/"
 # show up, we're almost certainly looking at stale 2025/26 data.
 PROMOTED_CLUBS_26_27 = {"Coventry City", "Ipswich Town", "Hull City"}
 
+# Exit code the scripts use ONLY for the expected "FPL is still serving last
+# season's data" case, so the sync workflow can tell it apart from a real
+# failure. The workflow treats this as an expected, self-resolving state
+# (alert once via a GitHub issue, then stay quiet) rather than a red-X
+# failure it emails about every couple of hours. Any OTHER non-zero exit is
+# still a genuine failure. 78 == EX_CONFIG from sysexits.h ("something the
+# operator must wait on / can't be helped here"), chosen to be distinctive.
+EXIT_STALE_SEASON = 78
+
 
 def normalize(name):
     return name.strip().lower()
@@ -290,9 +299,9 @@ def main():
               "This is expected outside of the season and will resolve "
               "itself once FPL rolls over to 2026/27 — try again closer to "
               "kickoff (or re-run manually then).")
-        sys.exit(1)  # non-zero exit -> the GitHub Action shows this run as
-                      # failed (red X), so you notice rather than it silently
-                      # succeeding while writing nothing.
+        sys.exit(EXIT_STALE_SEASON)  # distinct code -> the workflow treats
+                      # this as the expected off-season state (alert once via
+                      # a GitHub issue, then mute), not a repeating red-X.
 
     results, gw_scheduled_teams, gw_still_pending = build_results(team_id_to_name, fixtures)
 

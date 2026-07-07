@@ -24,7 +24,7 @@ SETUP.md for the one-off setup.
 import sys
 from datetime import datetime, timezone
 # reuses the same checks + team-name matching table
-from pull_results import get_db, is_current_season_data, match_team_name
+from pull_results import get_db, is_current_season_data, match_team_name, EXIT_STALE_SEASON
 # `requests` is imported lazily inside the functions that use it, so this
 # module stays importable with only the standard library (see the note in
 # pull_results.py).
@@ -86,7 +86,7 @@ def main():
               "to avoid setting the wrong gameweek/deadline. This is expected "
               "outside of the season and will resolve itself once FPL rolls "
               "over to 2026/27.")
-        sys.exit(1)
+        sys.exit(EXIT_STALE_SEASON)
 
     events = data["events"]
     now = datetime.now(timezone.utc)
