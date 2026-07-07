@@ -1,6 +1,7 @@
 # Features
 
-- GW0 season-long predictions — Golden Boot (confirmed: FPL autocomplete, 10 pts) + Premier League winner (potential; double points if unique correct pick). See [plan](plans/gw0-predictions.md).
+- GW0 season-long predictions — its own "Season" tab. **Golden Boot** (FPL autocomplete, 10 pts, doubled to 20 if you're the only one to pick that player) + **PL winner** (potential; doubles if unique). Locks at transfer-window close; loud before the deadline, de-emphasised after; the tab also shows the PL top 4 + current top scorers/assists. See [plan](plans/gw0-predictions.md).
+- Custom display names — each user sets their own; admin can override. See [plan](plans/display-names.md).
 
 # Done
 

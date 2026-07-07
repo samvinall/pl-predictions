@@ -13,7 +13,11 @@ a potential add-on.
   Firestore (same pattern as `config/fixtures`) and drive a type-to-search
   `<input>` + `<datalist>`, storing the player's **FPL element id** plus a
   display name. Canonical names, exact-match resolution, no manual judging.
-- **Points:** **10** for a correct pick (one config constant).
+- **Points:** **10** for a correct pick (`GOLDEN_BOOT_BONUS`).
+- **Unique bonus:** if you're the *only* player to correctly pick the Golden
+  Boot winner (picked by ≤ `UNIQUE_THRESHOLD`), the points **double** → 20.
+  Uniqueness is judged over everyone's Golden Boot picks — same mechanic as the
+  weekly unique-pick bonus and the champion pick below.
 
 ### Premier League winner — potential (not confirmed)
 - Pick one of the 20 `TEAMS` from a simple dropdown — trivial vs the Golden
@@ -23,18 +27,38 @@ a potential add-on.
   base 5 → 10 if you nailed it alone. Uniqueness is judged over correct picks
   (everyone who picked the actual winner); if just one person did, they get the
   double.
-- Left as an option; decide before building. *(Open: should the same
-  unique-doubling apply to the Golden Boot? Currently only specified for the
-  PL winner.)*
+- Left as an option; decide before building.
 
 ### Shared mechanics
-- **Lock:** both predictions lock at the **GW1 deadline** (kickoff of the
-  first match); freely changeable until then, frozen after.
+- **Lock:** season predictions lock at the **summer transfer-window close**
+  (decided) — a few weeks into the season, so picks can keep changing until
+  squads settle (fairer for the Golden Boot: you're not guessing before
+  deadline-day signings). It's a stored `config/season.predictionsDeadline`,
+  admin-set (the FPL API doesn't expose the window date). One shared deadline
+  for both the Golden Boot and the champion pick. Freely changeable until then,
+  frozen after.
 - **Visibility:** hidden from other players until locked, then revealed —
   consistent with weekly picks and **enforced in `firestore.rules`**, not just
   the UI.
 - **Resolution:** admin sets the correct answer(s) at season end; matching
   users get the bonus added to the league table.
+
+### Presentation — its own tab
+- Season predictions live in a dedicated **"Season" tab**, not a card buried in
+  the Pick flow.
+- **Before the deadline (esp. pre-GW1):** make it *loud* — a banner/nudge on the
+  other tabs pointing here ("Set your season predictions before GW1!"), since
+  it's easy to forget and can't be changed once locked.
+- **After the deadline:** *de-emphasise* — drop the nudges and tuck the tab away
+  (it's locked and rarely revisited, so it shouldn't nag).
+- **Live context on the tab:** show the current **top 4 of the PL table** and
+  the current **top scorers + assists** (assists shown for those top scorers),
+  so players can track how their Golden Boot pick is doing.
+  - *Data:* top scorers/assists are derivable from the FPL bootstrap `elements`
+    (`goals_scored`, `assists`) — mirror into `config/*` on the sync, cheap.
+    The **league table / top 4** isn't cleanly in the bootstrap, so it needs a
+    standings source (compute from results, or mirror another API endpoint) —
+    a bigger backend piece; treat as its own step.
 
 ## Data model
 
@@ -44,9 +68,10 @@ a potential add-on.
   dark-horse). Written server-side by the sync (Admin SDK bypasses rules).
 - `season_picks/{uid}` *(new)* — one doc per user:
   `{ uid, name, email, goldenBootId, goldenBootName, champion?, updated }`.
-- `config/season` *(new)* — `{ predictionsDeadline: <GW1 kickoff ts> }`, set by
-  the sync when GW1 is first seen (weekly picks use `config/current.deadline`,
-  which advances past GW1, so season lock needs its own stored timestamp).
+- `config/season` *(new)* — `{ predictionsDeadline: <transfer-window close ts> }`.
+  Set once by the admin — the window close is a known calendar date the FPL API
+  doesn't provide. Season picks lock against this, separate from the weekly
+  `config/current.deadline`.
 - `config/season_results` *(new, admin-written)* —
   `{ goldenBootId, goldenBootName, champion }` (the correct answers).
 - `js/config.js` constants: `GOLDEN_BOOT_BONUS = 10` (and `CHAMPION_BONUS = 5`
@@ -68,7 +93,8 @@ a potential add-on.
 
 - Mirror FPL `elements` → `config/players` (id, `web_name`, team, position),
   alongside the existing fixtures mirror.
-- Set `config/season.predictionsDeadline` to the GW1 deadline when detected.
+- No deadline auto-set: `config/season.predictionsDeadline` is the
+  transfer-window close, set by the admin (the FPL API doesn't expose it).
 - Existing stale-season guard already protects this.
 
 ## Front-end
@@ -84,10 +110,11 @@ a potential add-on.
 - **Leaderboard integration:** `loadEverything()` loads `season_picks` +
   `config/season_results`; `renderLeaderboard` adds `GOLDEN_BOOT_BONUS`
   (and `CHAMPION_BONUS`) to matching users' totals, shown with a tag/tooltip
-  (e.g. `+10 GB`) so it's clear where the points came from. For the champion
-  bonus, if exactly one player picked the actual winner, double their
-  `CHAMPION_BONUS` (unique-pick bonus) — count correct champion picks across
-  `season_picks` to decide.
+  (e.g. `+10 GB`) so it's clear where the points came from. For **both** the
+  Golden Boot and the champion bonuses, **double** the award if exactly one
+  player (≤ `UNIQUE_THRESHOLD`) picked the actual winner — tally correct picks
+  per `goldenBootId` and per `champion` across `season_picks` to decide
+  uniqueness.
 
 ## Nice-to-haves (later)
 
