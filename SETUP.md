@@ -157,12 +157,18 @@ your `results`/`config` collections as if it were real.
 Both scripts now guard against this automatically: they check whether
 any of this season's promoted clubs (Coventry City, Ipswich Town, Hull
 City) appear in the API's team list. If none do, the script prints a
-warning and exits without writing anything — and because it exits with
-a non-zero status, the GitHub Actions run shows as failed (red X) so
-you'll notice, rather than it quietly succeeding while doing nothing
-or, worse, writing stale data. This is expected and harmless if you
-see it before the season starts — it'll resolve itself once FPL
-switches over.
+warning and exits without writing anything (with a distinct exit code,
+`78`), so nothing stale ever gets written to Firestore.
+
+Because this is *expected* outside the season, the workflow doesn't spam
+you about it: instead of failing (red X) on every 2-hourly run, it
+**opens a single GitHub issue** the first time it sees stale data —
+titled "FPL sync paused…" and assigned to you — and then stays quiet on
+every following run while that issue is open. As soon as the API rolls
+over to real 2026/27 data, the next run **closes the issue
+automatically** and resumes. Genuine failures (a real bug, or the FPL
+API being down — any exit code other than 0 or 78) still fail the run
+and email you as normal.
 
 **If you already ran the scripts before this guard existed** and
 suspect stale data got written: Firestore console → `results`
@@ -235,7 +241,10 @@ by hand.
 You'll still want to glance at the Actions tab occasionally (green
 tick = ran fine, red X = something broke, e.g. the FPL API being
 briefly unavailable) — but nothing depends on you remembering to do
-anything week to week anymore.
+anything week to week anymore. The one *expected* non-failure state,
+"FPL still serving last season's data", is surfaced as a self-closing
+GitHub issue rather than a red X (see the note above), so a run staying
+green doesn't necessarily mean data was written pre-season.
 
 ## Manual result override (backup for when the API is down or wrong)
 
@@ -309,6 +318,10 @@ changeable right up to the deadline. Chip effects **stack** with the
 unique-pick bonus.
 
 - **Double Down** — doubles that week's win points.
+- **Double Chance** — a draw scores the same as a win this week (your team
+  only needs to avoid defeat). In a double gameweek, each win *or* draw
+  scores. A draw played this way earns points but still shows as a "D" in
+  your form and doesn't count towards the "Won" column — only real wins do.
 - **Goalfest** — if your team wins, you score the number of goals your
   team scored that fixture, instead of the flat win point. (In a double
   gameweek it sums the goals from each winning fixture.)
@@ -321,8 +334,9 @@ unique-pick bonus.
   against the team's **first** fixture only, not whichever one happens
   to fit.
 
-Chips are stored as an optional `chip` field (`"double"`, `"goalfest"`,
-or `"scorecard"`) on the pick document; Scorecard also stores a
+Chips are stored as an optional `chip` field (`"double"`,
+`"doublechance"`, `"goalfest"`, or `"scorecard"`) on the pick document;
+Scorecard also stores a
 `scorecard: { for, against }` map. No security-rule change is needed.
 Scoring lives in one shared `scorePick()` function used by both the
 league table and the history view.

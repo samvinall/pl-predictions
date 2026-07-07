@@ -14,6 +14,9 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write        # to open/close the stale-season alert issue
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -31,8 +34,69 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
 
+      # The two scripts capture their own exit code rather than failing the
+      # step, so the "Evaluate outcome" step below can tell the expected
+      # off-season "stale data" state (exit 78) apart from a real failure and
+      # decide whether to alert. `|| code=$?` keeps `set -e` from aborting.
       - name: Advance gameweek if needed
-        run: python advance_gameweek.py
+        id: advance
+        run: |
+          python advance_gameweek.py && code=0 || code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
 
       - name: Pull results and detect forfeits
-        run: python pull_results.py
+        id: pull
+        run: |
+          python pull_results.py && code=0 || code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      # Alert policy:
+      #  * Any exit code other than 0 or 78 == a genuine failure -> fail the
+      #    job so GitHub emails you (the normal red-X behaviour).
+      #  * Exit 78 (FPL still serving last season's data) is expected and
+      #    self-resolving. Flag it ONCE by opening a GitHub issue, then stay
+      #    quiet on every subsequent run while the issue is open -- no more
+      #    failure email every couple of hours.
+      #  * A fully healthy run auto-closes any open stale-season issue, so the
+      #    "alert once" resets cleanly the next time it happens.
+      - name: Evaluate outcome and alert
+        env:
+          GH_TOKEN: ${{ github.token }}
+          A: ${{ steps.advance.outputs.code }}
+          P: ${{ steps.pull.outputs.code }}
+        run: |
+          set -euo pipefail
+          STALE=78
+          LABEL="stale-season"
+          TITLE="⚠️ FPL sync paused — API still serving last season's data"
+
+          echo "advance exit=$A, pull exit=$P"
+
+          # Genuine failure in either script -> fail loudly.
+          if { [ "$A" != "0" ] && [ "$A" != "$STALE" ]; } \
+             || { [ "$P" != "0" ] && [ "$P" != "$STALE" ]; }; then
+            echo "::error::A sync script failed (advance=$A, pull=$P). See the step logs above."
+            exit 1
+          fi
+
+          # Make sure the label exists (no-op if it already does).
+          gh label create "$LABEL" --color FBCA04 \
+            --description "FPL API still serving last season's data; sync paused" 2>/dev/null || true
+
+          if [ "$A" = "$STALE" ] || [ "$P" = "$STALE" ]; then
+            existing="$(gh issue list --state open --label "$LABEL" --json number --jq '.[0].number // empty')"
+            if [ -z "$existing" ]; then
+              gh issue create --title "$TITLE" --label "$LABEL" \
+                --assignee "${{ github.repository_owner }}" \
+                --body $'The FPL API is still serving the previous season\'s data (none of this season\'s promoted clubs were found), so the sync is refusing to write anything to Firestore.\n\nThis is expected outside the season and resolves itself once FPL rolls over to the new season. **This issue will close automatically** once real data appears — no action needed. Alerting is muted while it stays open.'
+              echo "Opened stale-season alert issue."
+            else
+              echo "Stale-season already flagged in issue #$existing — staying quiet."
+            fi
+          else
+            # Healthy run: close any stale-season issue that was left open.
+            for n in $(gh issue list --state open --label "$LABEL" --json number --jq '.[].number'); do
+              gh issue close "$n" --comment "FPL data looks current again — sync resumed automatically. ✅"
+              echo "Closed stale-season issue #$n."
+            done
+          fi
