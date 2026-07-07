@@ -101,7 +101,7 @@ export function renderHistory(allPicks, results, goalsByKey, concededByKey, isOp
           label = fmtResult(outcomes, goalsByKey[key], concededByKey[key]);
         }
         const team = isMulti && p.team2 ? `${p.team} + ${p.team2}` : p.team;
-        return { name: p.name, email: p.email, team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit };
+        return { name: store.names[p.uid] || p.name, email: p.email, team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit };
       })
       .sort((a, b) => b.pts - a.pts);
 
@@ -456,8 +456,9 @@ export function renderSheet(weekPicks, isOpen) {
     const row = document.createElement("div");
     row.className = "pick-tile";
     const team = p.chip === "multipick" && p.team2 ? `${p.team} + ${p.team2}` : p.team;
+    const name = store.names[p.uid] || p.name;
     row.innerHTML = `<span class="pick-num">${i + 1}</span>`
-      + `<span>${p.name} &mdash; <strong>${team}</strong>${chipTag(p.chip, p.scorecard)}</span>`;
+      + `<span>${name} &mdash; <strong>${team}</strong>${chipTag(p.chip, p.scorecard)}</span>`;
     el.appendChild(row);
   });
 }
@@ -478,7 +479,7 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
     // neither counts as played nor as a scoring week.
     const didPlay = outcomes.some(o => o === "win" || o === "draw" || o === "loss");
 
-    if (!totals[p.email]) totals[p.email] = { name: p.name, points: 0, played: 0, won: 0, form: [], chips: [], chipPts: 0, bonusPts: 0 };
+    if (!totals[p.email]) totals[p.email] = { name: store.names[p.uid] || p.name, points: 0, played: 0, won: 0, form: [], chips: [], chipPts: 0, bonusPts: 0 };
     const t = totals[p.email];
     t.points += pts;
     t.chipPts += chipPts;
@@ -545,6 +546,32 @@ function renderForm(form) {
   return form.slice(-5)
     .map(f => `<span class="form-dot form-${f.letter}" title="GW${f.gw}: ${f.letter}">${f.letter}</span>`)
     .join("");
+}
+
+// Self-service display-name editor (This Week tab). Writes profiles/{uid};
+// the name then resolves everywhere via store.names on the next load.
+export function renderProfile() {
+  const input = document.getElementById("profile-name");
+  const btn = document.getElementById("profile-save");
+  const msg = document.getElementById("profile-msg");
+  if (!input || !btn) return;
+  const uid = store.currentUser?.uid;
+  input.value = store.names[uid] || store.currentUser?.displayName || "";
+  btn.onclick = async () => {
+    const name = input.value.trim();
+    if (!name) { msg.textContent = "Enter a name."; msg.className = "msg error"; return; }
+    try {
+      await setDoc(doc(db, "profiles", uid), {
+        uid, email: store.currentUser.email, name,
+      }, { merge: true });
+      msg.textContent = `Saved — you'll show as "${name}".`;
+      msg.className = "msg ok";
+      await store.reload();
+    } catch (e) {
+      msg.textContent = `Couldn't save: ${e.message}`;
+      msg.className = "msg error";
+    }
+  };
 }
 
 // Fill the Rules tab's chip list straight from CHIPS, so it can never drift

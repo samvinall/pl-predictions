@@ -71,5 +71,13 @@ service cloud.firestore {
 
       allow delete: if false;
     }
+
+    // profiles/{uid} holds { uid, email, name } -- a player's chosen display
+    // name. Anyone allow-listed can read them (names show on the sheet/table);
+    // you can only write your own, except the admin who can override any.
+    match /profiles/{uid} {
+      allow read: if isAllowed();
+      allow write: if (isAllowed() && request.auth.uid == uid) || isAdmin();
+    }
   }
 }

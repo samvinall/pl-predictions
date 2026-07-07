@@ -141,6 +141,40 @@ export function setupAccessPanel() {
   loadAllowlist().then(renderAllowlist).catch(() => {});
 }
 
+// Admin-only: override any player's display name. Writes profiles/{uid}
+// (admin may write any uid per the rules). Blank name = they fall back to
+// their own / Google name.
+export function renderAdminNames(players) {
+  const el = document.getElementById("admin-names-list");
+  if (!el) return;
+  if (!players || players.length === 0) {
+    el.innerHTML = `<p class="empty">No players yet — names can be set once people have signed in or picked.</p>`;
+    return;
+  }
+  el.innerHTML = players
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+    .map(p => `<div class="pick-tile" style="display:flex; align-items:center; gap:0.5rem; justify-content:space-between;">
+      <span class="mono" style="font-size:0.72rem; flex:1; min-width:8rem; overflow:hidden; text-overflow:ellipsis;">${p.email || p.uid}</span>
+      <input type="text" maxlength="24" value="${(p.name || "").replace(/"/g, "&quot;")}" data-uid="${p.uid}" data-email="${p.email || ""}" style="padding:0.35rem; font-family:'JetBrains Mono',monospace; width:9rem;" />
+      <button class="ghost" data-save="${p.uid}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Save</button>
+    </div>`).join("");
+
+  el.onclick = async (ev) => {
+    const btn = ev.target.closest("button[data-save]");
+    if (!btn) return;
+    const uid = btn.getAttribute("data-save");
+    const input = el.querySelector(`input[data-uid="${uid}"]`);
+    try {
+      await setDoc(doc(db, "profiles", uid), {
+        uid, email: input.getAttribute("data-email") || "", name: input.value.trim(),
+      }, { merge: true });
+      await store.reload();
+    } catch (e) {
+      alert(`Couldn't save name: ${e.message}`);
+    }
+  };
+}
+
 function renderAllowlist(emails) {
   const el = document.getElementById("allow-list");
   if (!el) return;

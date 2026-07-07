@@ -11,10 +11,11 @@ import {
 import { ADMIN_EMAIL, UNLOCK_GAMEWEEK } from "./config.js";
 import { store } from "./store.js";
 import { multipickOutcomes } from "./scoring.js";
-import { setupAdminPanel, setupAccessPanel, renderAdminRecent, loadAllowlist } from "./admin.js";
+import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, loadAllowlist } from "./admin.js";
 import {
   startDeadlineCountdown, renderPickPanel, renderSheet,
-  renderLeaderboard, renderHistory, renderFixtures, renderThisWeek, renderRules,
+  renderLeaderboard, renderHistory, renderFixtures, renderThisWeek,
+  renderProfile, renderRules,
 } from "./render.js";
 import { initTabs } from "./tabs.js";
 
@@ -132,6 +133,16 @@ async function loadEverything() {
   const allPicks = Array.from(picksById.values())
     .filter(p => allowedEmails.has((p.email || "").toLowerCase()));
 
+  // Resolve chosen display names (profiles/{uid}) -> store.names, used
+  // wherever a player's name is shown (sheet, table, history, whoami).
+  store.names = {};
+  try {
+    const profilesSnap = await getDocs(collection(db, "profiles"));
+    profilesSnap.docs.forEach(d => { const pr = d.data(); if (pr && pr.name) store.names[d.id] = pr.name; });
+  } catch (e) { /* names are optional */ }
+  document.getElementById("whoami").textContent =
+    `Signed in as ${store.names[store.currentUser.uid] || store.currentUser.displayName} (${store.currentUser.email})`;
+
   const resultsSnap = await getDocs(collection(db, "results"));
   const results = {};        // key -> array of outcomes, e.g. ["win"] or ["win","loss"]
   const goalsByKey = {};     // key -> array of goals scored by the team, aligned to results
@@ -145,7 +156,15 @@ async function loadEverything() {
     concededByKey[key] = r.conceded || [];
     resultsDocs.push(r);
   });
-  if (store.currentUser.email === ADMIN_EMAIL) renderAdminRecent(resultsDocs);
+  if (store.currentUser.email === ADMIN_EMAIL) {
+    renderAdminRecent(resultsDocs);
+    // Players the admin can rename: everyone who's picked, plus anyone with a
+    // profile already set.
+    const byUid = new Map();
+    allPicks.forEach(p => { if (!byUid.has(p.uid)) byUid.set(p.uid, { uid: p.uid, email: p.email, name: store.names[p.uid] || p.name }); });
+    Object.keys(store.names).forEach(uid => { if (!byUid.has(uid)) byUid.set(uid, { uid, email: "", name: store.names[uid] }); });
+    renderAdminNames([...byUid.values()]);
+  }
 
   store.myPicks = allPicks.filter(p => p.uid === store.currentUser.uid);
   // The teams a pick occupies: two for a Multipick, otherwise one.
@@ -194,6 +213,7 @@ async function loadEverything() {
     if (fxSnap.exists()) fixturesData = fxSnap.data();
   } catch (e) { /* leave null -> "not published yet" */ }
 
+  renderProfile();
   renderPickPanel(isOpen, myTeamsUsedSinceUnlock);
   renderThisWeek(fixturesData);
   renderSheet(allPicks.filter(p => p.gameweek === store.currentConfig.gameweek), isOpen);
