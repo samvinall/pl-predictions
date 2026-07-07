@@ -9,6 +9,7 @@
     --muted:#726C58;
     --red:#A9382C;
     --teal:#2E6E6A;
+    --plum:#7A4E7E;
     --radius:10px;
   }
   *{box-sizing:border-box;}
@@ -269,6 +270,11 @@
   .chip-doublechance{ background:var(--teal); color:var(--paper); }
   .chip-goalfest{ background:var(--gold); color:var(--pitch-dark); }
   .chip-scorecard{ background:var(--pitch-dark); color:var(--paper); }
+  .chip-multipick{ background:var(--plum); color:var(--paper); }
+  .scorecard-form select{
+    padding:0.35rem; font-family:'JetBrains Mono', monospace;
+    border:1px solid var(--line); border-radius:6px;
+  }
   .scorecard-form{
     width:100%; display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center;
     margin-top:0.4rem; padding:0.7rem; border:1px dashed var(--line); border-radius:8px;
@@ -294,3 +300,27 @@
   .rank-1{ color:var(--gold); font-weight:700; }
   .rank-2{ color:#9a9a9a; font-weight:700; }
   .rank-3{ color:#b08d57; font-weight:700; }
+
+  /* ---- tabs ---- */
+  .tab-nav{
+    display:flex; flex-wrap:wrap; gap:0.4rem;
+    margin-bottom:1.5rem; border-bottom:2px solid var(--line);
+  }
+  .tab-btn{
+    background:transparent; color:var(--muted); border:1px solid transparent;
+    border-bottom:none; border-radius:8px 8px 0 0;
+    padding:0.55rem 1rem; margin-bottom:-2px;
+    font-family:'JetBrains Mono', monospace; font-size:0.8rem;
+    text-transform:uppercase; letter-spacing:0.05em; cursor:pointer;
+  }
+  .tab-btn:hover{ background:var(--paper-2); color:var(--ink); }
+  .tab-btn.active{
+    background:#fff8ea; color:var(--pitch-dark); font-weight:700;
+    border-color:var(--line); border-bottom:2px solid #fff8ea;
+  }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+
+  /* ---- rules ---- */
+  .rules-list{ margin:0.4rem 0 0; padding-left:1.1rem; }
+  .rules-list li{ margin:0.4rem 0; font-size:0.9rem; }

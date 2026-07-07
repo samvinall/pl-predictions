@@ -45,59 +45,94 @@
       <button class="ghost" id="signout-btn">Sign out</button>
     </div>
 
-    <div class="layout">
-    <div class="col-main">
+    <nav class="tab-nav" id="tab-nav" role="tablist">
+      <button class="tab-btn" data-tab="pick" role="tab">Pick</button>
+      <button class="tab-btn" data-tab="table" role="tab">Table</button>
+      <button class="tab-btn" data-tab="history" id="tab-btn-history" role="tab" style="display:none;">History</button>
+      <button class="tab-btn" data-tab="rules" role="tab">Rules</button>
+      <button class="tab-btn" data-tab="admin" id="tab-btn-admin" role="tab" style="display:none;">Admin</button>
+    </nav>
 
-    <div class="card" id="pick-card">
-      <h2>Your Pick</h2>
-      <p class="eyebrow" id="pick-status"></p>
-      <div class="team-grid" id="team-grid"></div>
-      <div class="chip-row" id="chip-row"></div>
-      <div class="msg" id="pick-msg"></div>
-    </div>
-
-    <div class="card">
-      <h2>This Gameweek's Sheet</h2>
-      <div id="sheet-list"></div>
-    </div>
-
-    <div class="card">
-      <h2>League Table</h2>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr><th></th><th>Player</th><th>Pld</th><th>Won</th><th>Form</th><th>PPW</th><th title="Chips played">Chips</th><th title="Points earned from chips (Double Down, Double Chance, Goalfest, Scorecard)">Chip pts</th><th title="Points earned from the unique-pick bonus">Bonus pts</th><th>Pts</th></tr>
-          </thead>
-          <tbody id="leaderboard-body"></tbody>
-        </table>
+    <!-- PICK -->
+    <section id="tab-pick" class="tab-panel" role="tabpanel">
+      <div class="layout">
+      <div class="col-main">
+        <div class="card" id="pick-card">
+          <h2>Your Pick</h2>
+          <p class="eyebrow" id="pick-status"></p>
+          <div class="team-grid" id="team-grid"></div>
+          <div class="chip-row" id="chip-row"></div>
+          <div class="msg" id="pick-msg"></div>
+        </div>
       </div>
-    </div>
+      <aside class="col-side">
+        <div class="card" id="fixtures-card">
+          <h2 id="fixtures-title">Fixtures</h2>
+          <div id="fixtures-list"></div>
+        </div>
+      </aside>
+      </div><!-- /layout -->
+    </section>
 
-    <div class="card" id="history-card" style="display:none;">
-      <h2>Gameweek History</h2>
-      <label class="eyebrow" for="history-gw">Look back at a past gameweek</label>
-      <select id="history-gw" style="display:block; margin:0.4rem 0 0.9rem; padding:0.5rem; font-family:'JetBrains Mono',monospace;"></select>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr><th>Player</th><th>Team</th><th>Result</th><th>Pts</th></tr>
-          </thead>
-          <tbody id="history-body"></tbody>
-        </table>
+    <!-- TABLE -->
+    <section id="tab-table" class="tab-panel" role="tabpanel">
+      <div class="card">
+        <h2>This Gameweek's Sheet</h2>
+        <div id="sheet-list"></div>
       </div>
-    </div>
 
-    </div><!-- /col-main -->
-
-    <aside class="col-side">
-      <div class="card" id="fixtures-card">
-        <h2 id="fixtures-title">Fixtures</h2>
-        <div id="fixtures-list"></div>
+      <div class="card">
+        <h2>League Table</h2>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th></th><th>Player</th><th>Pld</th><th>Won</th><th>Form</th><th>PPW</th><th title="Chips played">Chips</th><th title="Points earned from chips (Double Down, Double Chance, Goalfest, Scorecard, Multipick)">Chip pts</th><th title="Points earned from the unique-pick bonus">Bonus pts</th><th>Pts</th></tr>
+            </thead>
+            <tbody id="leaderboard-body"></tbody>
+          </table>
+        </div>
       </div>
-    </aside>
-    </div><!-- /layout -->
+    </section>
 
-    <div class="card" id="admin-card" style="display:none; border-color:var(--gold);">
+    <!-- HISTORY -->
+    <section id="tab-history" class="tab-panel" role="tabpanel">
+      <div class="card" id="history-card">
+        <h2>Gameweek History</h2>
+        <label class="eyebrow" for="history-gw">Look back at a past gameweek</label>
+        <select id="history-gw" style="display:block; margin:0.4rem 0 0.9rem; padding:0.5rem; font-family:'JetBrains Mono',monospace;"></select>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Player</th><th>Team</th><th>Result</th><th>Pts</th></tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- RULES -->
+    <section id="tab-rules" class="tab-panel" role="tabpanel">
+      <div class="card">
+        <h2>How to play</h2>
+        <ul class="rules-list">
+          <li>Pick <strong>one team</strong> each gameweek before the deadline (kickoff of the first match). Change it as often as you like until then.</li>
+          <li>A <strong>win</strong> scores 1 point; draws and losses score nothing.</li>
+          <li><strong>No repeats:</strong> once you've used a team it's locked until the reshuffle at gameweek 20 — then every team frees up again.</li>
+          <li><strong>Unique-pick bonus:</strong> if you're the only one to back a team that week, your points for it are doubled.</li>
+          <li>Everyone's picks stay <strong>hidden</strong> from each other until the gameweek locks.</li>
+          <li>If your team's match is postponed (a "forfeit"), that week scores 0 but the team isn't used up — you can pick it again.</li>
+        </ul>
+        <h2 style="margin-top:1.4rem;">Chips</h2>
+        <p class="eyebrow">One chip per gameweek, each usable once per half-season (GW1–19 and GW20+). Chips stack with the unique-pick bonus.</p>
+        <div id="rules-chips"></div>
+      </div>
+    </section>
+
+    <!-- ADMIN -->
+    <section id="tab-admin" class="tab-panel" role="tabpanel">
+
+    <div class="card" id="admin-card" style="border-color:var(--gold);">
       <h2>Admin &mdash; Manual Result Override</h2>
       <p class="eyebrow">Use this if the auto-pull script is broken or a result needs correcting. Manual entries are never overwritten by the automated script.</p>
       <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:end; margin-top:0.8rem;">
@@ -139,7 +174,7 @@
       <div id="admin-recent"></div>
     </div>
 
-    <div class="card" id="admin-access-card" style="display:none; border-color:var(--gold);">
+    <div class="card" id="admin-access-card" style="border-color:var(--gold);">
       <h2>Admin &mdash; Guest List</h2>
       <p class="eyebrow">Only these accounts can sign in and play. Anyone else is turned away at the door. Emails match the Google account they sign in with (case doesn't matter).</p>
       <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:end; margin-top:0.8rem;">
@@ -153,6 +188,8 @@
       <p class="eyebrow" style="margin-top:1rem;">Current guest list</p>
       <div id="allow-list"></div>
     </div>
+
+    </section><!-- /tab-admin -->
 
   </div>
 

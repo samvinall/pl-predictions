@@ -31,12 +31,16 @@ export const WIN_POINTS = 1;
 //                   normal win if goals aren't known)
 //   scorecard    -> predict the exact scoreline; nail it for a flat bonus,
 //                   regardless of whether the team won
+//   multipick    -> pick two teams this week; a flat win point if either wins
+//                   (unique bonus if the winning team is unique). Both teams
+//                   are then used up.
 export const SCORECARD_BONUS = 5;
 export const CHIPS = {
   double:       { label: "Double Down",   desc: "Doubles the points you score this week. Stacks on top of the unique-pick bonus." },
   doublechance: { label: "Double Chance", desc: "Your team only needs to avoid defeat — a draw scores the same as a win this week (both fixtures in a double gameweek)." },
   goalfest:     { label: "Goalfest",      desc: "If your team wins, you score the number of goals it scored that match instead of the flat 1 point (goals from both fixtures in a double gameweek)." },
   scorecard:    { label: "Scorecard",     desc: `Predict your team's exact scoreline. Nail it for a flat +${SCORECARD_BONUS} — even on a draw or loss. Judged on the first fixture in a double gameweek.` },
+  multipick:    { label: "Multipick",     desc: "Pick two teams this week; if either wins you score the win (unique bonus applies if the winning team is unique). Both teams are then used up." },
 };
 export const halfOf = gw => (gw < UNLOCK_GAMEWEEK ? 1 : 2);
 
