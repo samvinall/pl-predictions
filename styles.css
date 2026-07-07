@@ -142,6 +142,8 @@
   }
   #signin-gate{ text-align:center; padding:3rem 1.5rem; }
   #signin-gate p{ color:var(--muted); max-width:40ch; margin:0.8rem auto 1.4rem; }
+  .pick-intro{ color:var(--muted); font-size:0.9rem; margin:0 0 0.8rem; }
+  .pick-intro strong{ color:var(--ink); }
   .team-grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(140px,1fr));
