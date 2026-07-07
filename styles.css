@@ -1,0 +1,296 @@
+  :root{
+    --paper:#EFEAD8;
+    --paper-2:#E6E0CB;
+    --ink:#16201C;
+    --pitch:#1F5C3F;
+    --pitch-dark:#123B28;
+    --gold:#C7A34C;
+    --line:#CFC7AC;
+    --muted:#726C58;
+    --red:#A9382C;
+    --teal:#2E6E6A;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Literata', serif;
+    line-height:1.5;
+  }
+  .display{
+    font-family:'Bebas Neue', sans-serif;
+    letter-spacing:0.03em;
+  }
+  .mono{
+    font-family:'JetBrains Mono', monospace;
+  }
+  header.hero{
+    background:var(--pitch);
+    color:var(--paper);
+    padding:2.2rem 1.5rem 1.6rem;
+    position:relative;
+    overflow:hidden;
+    border-bottom:4px solid var(--gold);
+  }
+  header.hero::after{
+    content:"";
+    position:absolute;
+    right:-60px; top:-60px;
+    width:220px; height:220px;
+    border:2px solid rgba(239,234,216,0.15);
+    border-radius:50%;
+  }
+  header.hero::before{
+    content:"";
+    position:absolute;
+    left:-30%; right:-30%; top:50%;
+    height:2px;
+    background:rgba(239,234,216,0.12);
+  }
+  .hero-inner{ position:relative; z-index:1; max-width:760px; margin:0 auto; }
+  h1.display{
+    font-size:clamp(2.4rem, 6vw, 3.4rem);
+    margin:0;
+    line-height:0.95;
+  }
+  .hero-sub{
+    margin-top:0.4rem;
+    font-size:0.8rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--gold);
+  }
+  main{
+    max-width:760px;
+    margin:0 auto;
+    padding:1.5rem 1.5rem 4rem;
+  }
+  /* On wide screens the page grows and the fixtures rail sits to the
+     right of the main column; on narrow screens everything stacks. */
+  .layout{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:0 1.5rem;
+    align-items:start;
+  }
+  @media (min-width:960px){
+    main{ max-width:1080px; }
+    .layout{ grid-template-columns:minmax(0,1fr) 300px; }
+    .col-side{ position:sticky; top:1rem; }
+  }
+  .fixture{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:0.6rem;
+    padding:0.45rem 0;
+    border-bottom:1px dashed var(--paper-2);
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.74rem;
+  }
+  .fixture:last-child{ border-bottom:none; }
+  .fx-match{ line-height:1.35; }
+  .fx-v{ color:var(--muted); padding:0 0.15rem; }
+  .fx-meta{ color:var(--muted); white-space:nowrap; text-align:right; }
+  .fx-score{ font-weight:700; color:var(--pitch-dark); }
+  .fx-live{ color:var(--red); }
+  .table-scroll{ overflow-x:auto; }
+  .card{
+    background:#fff8ea;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:1.4rem;
+    margin-bottom:1.5rem;
+    box-shadow:0 1px 0 var(--line);
+  }
+  .card h2{
+    font-family:'Bebas Neue', sans-serif;
+    letter-spacing:0.02em;
+    font-size:1.5rem;
+    margin:0 0 0.9rem;
+    color:var(--pitch-dark);
+    border-bottom:2px solid var(--paper-2);
+    padding-bottom:0.5rem;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.7rem;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    color:var(--muted);
+  }
+  button, .btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.85rem;
+    border:1px solid var(--ink);
+    background:var(--ink);
+    color:var(--paper);
+    padding:0.65rem 1.1rem;
+    border-radius:6px;
+    cursor:pointer;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+  button:hover{ background:var(--pitch-dark); border-color:var(--pitch-dark); }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+  button.ghost{
+    background:transparent;
+    color:var(--ink);
+  }
+  #signin-gate{ text-align:center; padding:3rem 1.5rem; }
+  #signin-gate p{ color:var(--muted); max-width:40ch; margin:0.8rem auto 1.4rem; }
+  .team-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(140px,1fr));
+    gap:0.6rem;
+  }
+  .team-chip{
+    border:1px solid var(--line);
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:8px;
+    padding:0.6rem 0.7rem;
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.78rem;
+    text-align:left;
+    cursor:pointer;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .team-chip:hover{ border-color:var(--pitch); background:var(--paper-2); color:var(--ink); }
+  .team-chip.selected{
+    background:var(--pitch);
+    border-color:var(--pitch);
+    color:var(--paper);
+  }
+  .team-chip.locked{
+    opacity:0.35;
+    cursor:not-allowed;
+    text-decoration:line-through;
+  }
+  .lock-note{ font-size:0.65rem; color:var(--red); }
+  .status-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:0.6rem 1.2rem;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:1.4rem;
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.78rem;
+    color:var(--muted);
+  }
+  .badge{
+    display:inline-block;
+    background:var(--gold);
+    color:var(--pitch-dark);
+    padding:0.15rem 0.55rem;
+    border-radius:20px;
+    font-weight:700;
+  }
+  table{ width:100%; border-collapse:collapse; font-family:'JetBrains Mono', monospace; font-size:0.82rem; }
+  th, td{ text-align:left; padding:0.45rem 0.4rem; border-bottom:1px solid var(--paper-2); }
+  th{ text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em; color:var(--muted); }
+  tr.me{ background:rgba(31,92,63,0.08); }
+  .rank{ color:var(--muted); width:2ch; }
+  .bonus-tag{
+    font-size:0.65rem;
+    background:var(--gold);
+    color:var(--pitch-dark);
+    padding:0.1rem 0.4rem;
+    border-radius:10px;
+    margin-left:0.4rem;
+  }
+  .pick-tile{
+    display:flex;
+    align-items:center;
+    gap:0.7rem;
+    padding:0.5rem 0;
+    border-bottom:1px dashed var(--paper-2);
+  }
+  .pick-num{
+    font-family:'Bebas Neue', sans-serif;
+    font-size:1.6rem;
+    color:var(--gold);
+    -webkit-text-stroke:1px var(--pitch-dark);
+    width:2.4rem;
+    text-align:center;
+  }
+  .empty{ color:var(--muted); font-size:0.85rem; font-style:italic; }
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:0.72rem;
+    padding:2rem 1rem;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .msg{
+    font-size:0.8rem;
+    margin-top:0.7rem;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .msg.error{ color:var(--red); }
+  .msg.ok{ color:var(--pitch-dark); }
+
+  /* ---- chips ---- */
+  .chip-row{
+    display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;
+    margin-top:1.1rem; padding-top:1rem; border-top:1px dashed var(--paper-2);
+  }
+  .chip-label{
+    width:100%; font-family:'JetBrains Mono', monospace; font-size:0.68rem;
+    text-transform:uppercase; letter-spacing:0.1em; color:var(--muted);
+  }
+  .chip-btn{
+    font-family:'JetBrains Mono', monospace; font-size:0.72rem;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink);
+    padding:0.45rem 0.75rem; border-radius:20px; cursor:pointer;
+    text-transform:none; letter-spacing:0;
+  }
+  .chip-btn:hover:not(:disabled){ border-color:var(--pitch); background:var(--paper-2); }
+  .chip-btn.selected{ background:var(--gold); border-color:var(--gold); color:var(--pitch-dark); font-weight:700; }
+  .chip-btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .chip-btn .used{ font-size:0.6rem; color:var(--red); margin-left:0.35rem; }
+  .chip-hint{ width:100%; font-size:0.72rem; color:var(--muted); font-style:italic; }
+  .chip-desc{
+    width:100%; margin:0.2rem 0 0; font-size:0.78rem; line-height:1.4; color:var(--ink);
+    background:var(--paper-2); border-left:3px solid var(--gold);
+    padding:0.5rem 0.7rem; border-radius:4px;
+  }
+  .chip-desc strong{ color:var(--pitch-dark); }
+  .chip-tag{
+    font-size:0.6rem; padding:0.1rem 0.45rem; border-radius:10px; margin-left:0.4rem;
+    text-transform:uppercase; letter-spacing:0.04em; vertical-align:middle; font-family:'JetBrains Mono', monospace;
+  }
+  .chip-double{ background:var(--pitch); color:var(--paper); }
+  .chip-doublechance{ background:var(--teal); color:var(--paper); }
+  .chip-goalfest{ background:var(--gold); color:var(--pitch-dark); }
+  .chip-scorecard{ background:var(--pitch-dark); color:var(--paper); }
+  .scorecard-form{
+    width:100%; display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center;
+    margin-top:0.4rem; padding:0.7rem; border:1px dashed var(--line); border-radius:8px;
+    font-family:'JetBrains Mono', monospace; font-size:0.74rem; color:var(--muted);
+  }
+  .scorecard-form input{
+    width:3.2rem; padding:0.35rem; font-family:'JetBrains Mono', monospace;
+    text-align:center; border:1px solid var(--line); border-radius:6px;
+  }
+
+  /* ---- league-table flourishes ---- */
+  .form-cell{ white-space:nowrap; }
+  .form-dot{
+    display:inline-block; width:1.15rem; height:1.15rem; line-height:1.15rem;
+    text-align:center; border-radius:4px; font-size:0.6rem; font-weight:700;
+    margin-right:2px; color:#fff;
+  }
+  .form-W{ background:var(--pitch); }
+  .form-D{ background:var(--muted); }
+  .form-L{ background:var(--red); }
+  .form-F{ background:transparent; color:var(--muted); border:1px solid var(--line); }
+  .crown, .streak{ font-size:0.85rem; margin-left:0.15rem; }
+  .rank-1{ color:var(--gold); font-weight:700; }
+  .rank-2{ color:#9a9a9a; font-weight:700; }
+  .rank-3{ color:#b08d57; font-weight:700; }

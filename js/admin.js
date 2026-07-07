@@ -1,0 +1,157 @@
+// ---------------------------------------------------------------------------
+// Admin-only panels: the manual result override, and the guest-list (allowlist)
+// manager. Only wired up when the signed-in account is the admin (see app.js).
+// ---------------------------------------------------------------------------
+import { TEAMS } from "./config.js";
+import { db, doc, getDoc, setDoc } from "./firebase.js";
+import { store } from "./store.js";
+
+export function setupAdminPanel() {
+  const teamSelect = document.getElementById("admin-team");
+  teamSelect.innerHTML = TEAMS.map(t => `<option value="${t}">${t}</option>`).join("");
+
+  document.getElementById("admin-submit").onclick = async () => {
+    const msg = document.getElementById("admin-msg");
+    const gw = parseInt(document.getElementById("admin-gw").value, 10);
+    const team = teamSelect.value;
+    const result = document.getElementById("admin-result").value;
+    const append = document.getElementById("admin-append").checked;
+    const goalsRaw = document.getElementById("admin-goals").value;
+    const concededRaw = document.getElementById("admin-conceded").value;
+    // Goals for/against this team in this fixture -- needed for the
+    // Goalfest (for) and Scorecard (both) chips. Optional: blank -> 0.
+    const goal = goalsRaw === "" ? 0 : parseInt(goalsRaw, 10);
+    const conceded = concededRaw === "" ? 0 : parseInt(concededRaw, 10);
+
+    if (!gw) {
+      msg.textContent = "Enter a gameweek number.";
+      msg.className = "msg error";
+      return;
+    }
+
+    const docId = `gw${gw}_${team.replace(/\s+/g, "_")}`;
+    try {
+      let resultsArr = [result];
+      let goalsArr = [goal];
+      let concededArr = [conceded];
+      if (append) {
+        const existing = await getDoc(doc(db, "results", docId));
+        if (existing.exists() && existing.data().source === "manual") {
+          resultsArr = [...(existing.data().results || []), result];
+          goalsArr = [...(existing.data().goals || []), goal];
+          concededArr = [...(existing.data().conceded || []), conceded];
+        }
+        // if it doesn't exist yet, or was API-sourced, "append" just
+        // starts a fresh manual array with this one entry
+      }
+      // source: "manual" marks this so pull_results.py will never
+      // silently overwrite it on a later automated run.
+      await setDoc(doc(db, "results", docId), {
+        gameweek: gw, team, results: resultsArr, goals: goalsArr, conceded: concededArr, source: "manual",
+      });
+      msg.textContent = `Saved: GW${gw} ${team} → [${resultsArr.join(", ")}] ${goalsArr.join("/")}–${concededArr.join("/")}`;
+      msg.className = "msg ok";
+      document.getElementById("admin-gw").value = "";
+      document.getElementById("admin-goals").value = "";
+      document.getElementById("admin-conceded").value = "";
+      document.getElementById("admin-append").checked = false;
+      await store.reload();
+    } catch (e) {
+      msg.textContent = `Couldn't save: ${e.message}`;
+      msg.className = "msg error";
+    }
+  };
+}
+
+export function renderAdminRecent(resultsDocs) {
+  const el = document.getElementById("admin-recent");
+  if (!el) return;
+  const manual = resultsDocs.filter(r => r.source === "manual");
+  if (manual.length === 0) {
+    el.innerHTML = `<p class="empty">No manual overrides yet.</p>`;
+    return;
+  }
+  el.innerHTML = manual
+    .sort((a, b) => b.gameweek - a.gameweek)
+    .map(r => `<div class="pick-tile"><span class="mono" style="font-size:0.78rem;">GW${r.gameweek} — ${r.team} — [${(r.results || []).join(", ")}]</span></div>`)
+    .join("");
+}
+
+// Admin-only: manage config/allowlist. Emails are stored lower-cased so
+// matching against the signed-in Google email is consistent. The admin's
+// own email is always allowed by the rules even if it isn't in the list.
+export async function loadAllowlist() {
+  const snap = await getDoc(doc(db, "config", "allowlist"));
+  const emails = (snap.exists() && snap.data().emails) || [];
+  // Dedupe + lower-case defensively, and keep it sorted for display.
+  return [...new Set(emails.map(e => (e || "").toLowerCase()))].sort();
+}
+
+export function setupAccessPanel() {
+  const input = document.getElementById("allow-email");
+  const msg = document.getElementById("allow-msg");
+
+  const save = async (emails) => {
+    await setDoc(doc(db, "config", "allowlist"), { emails }, { merge: true });
+  };
+
+  document.getElementById("allow-add").onclick = async () => {
+    const email = input.value.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      msg.textContent = "Enter a valid email address.";
+      msg.className = "msg error";
+      return;
+    }
+    try {
+      const emails = await loadAllowlist();
+      if (emails.includes(email)) {
+        msg.textContent = `${email} is already on the list.`;
+        msg.className = "msg";
+      } else {
+        emails.push(email);
+        await save(emails.sort());
+        msg.textContent = `Added ${email}.`;
+        msg.className = "msg ok";
+        input.value = "";
+      }
+      renderAllowlist(await loadAllowlist());
+    } catch (e) {
+      msg.textContent = `Couldn't save: ${e.message}`;
+      msg.className = "msg error";
+    }
+  };
+
+  // Remove buttons are wired up via event delegation in renderAllowlist.
+  document.getElementById("allow-list").onclick = async (ev) => {
+    const btn = ev.target.closest("button[data-remove]");
+    if (!btn) return;
+    const email = btn.getAttribute("data-remove");
+    try {
+      const emails = (await loadAllowlist()).filter(e => e !== email);
+      await save(emails);
+      msg.textContent = `Removed ${email}.`;
+      msg.className = "msg ok";
+      renderAllowlist(emails);
+    } catch (e) {
+      msg.textContent = `Couldn't save: ${e.message}`;
+      msg.className = "msg error";
+    }
+  };
+
+  loadAllowlist().then(renderAllowlist).catch(() => {});
+}
+
+function renderAllowlist(emails) {
+  const el = document.getElementById("allow-list");
+  if (!el) return;
+  if (!emails || emails.length === 0) {
+    el.innerHTML = `<p class="empty">No one added yet — only you can get in.</p>`;
+    return;
+  }
+  el.innerHTML = emails
+    .map(e => `<div class="pick-tile" style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem;">
+      <span class="mono" style="font-size:0.78rem;">${e}</span>
+      <button class="ghost" data-remove="${e}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Remove</button>
+    </div>`)
+    .join("");
+}
