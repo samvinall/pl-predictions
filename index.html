@@ -45,9 +45,12 @@
       <button class="ghost" id="signout-btn">Sign out</button>
     </div>
 
+    <div id="season-nudge" style="display:none;"></div>
+
     <nav class="tab-nav" id="tab-nav" role="tablist">
       <button class="tab-btn" data-tab="pick" role="tab">Pick</button>
       <button class="tab-btn" data-tab="thisweek" role="tab">This Week</button>
+      <button class="tab-btn" data-tab="season" id="tab-btn-season" role="tab">Season</button>
       <button class="tab-btn" data-tab="table" role="tab">Table</button>
       <button class="tab-btn" data-tab="history" id="tab-btn-history" role="tab" style="display:none;">History</button>
       <button class="tab-btn" data-tab="rules" role="tab">Rules</button>
@@ -96,6 +99,20 @@
       <div class="card">
         <h2>This Gameweek's Sheet</h2>
         <div id="sheet-list"></div>
+      </div>
+    </section>
+
+    <!-- SEASON -->
+    <section id="tab-season" class="tab-panel" role="tabpanel">
+      <div class="card" id="season-card">
+        <h2>Season Predictions</h2>
+        <div id="season-body"></div>
+      </div>
+      <div class="card" id="standings-card">
+        <h2 id="standings-title">Premier League — Top 4</h2>
+        <div id="standings-body"></div>
+        <h2 style="margin-top:1.2rem;">Top Scorers</h2>
+        <div id="topscorers-body"></div>
       </div>
     </section>
 
@@ -213,6 +230,29 @@
       <h2>Admin &mdash; Player Names</h2>
       <p class="eyebrow">Override any player's display name (blank = use their own).</p>
       <div id="admin-names-list"></div>
+    </div>
+
+    <div class="card" id="admin-season-card" style="border-color:var(--gold);">
+      <h2>Admin &mdash; Season Predictions</h2>
+      <p class="eyebrow">Set the lock date (transfer-window close), and at season end the correct answers.</p>
+      <div style="margin-top:0.6rem;">
+        <label class="eyebrow" for="admin-season-deadline">Predictions lock (your local time)</label><br/>
+        <input type="datetime-local" id="admin-season-deadline" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;" />
+        <button id="admin-season-deadline-save">Save lock</button>
+      </div>
+      <div style="margin-top:0.9rem; display:flex; flex-wrap:wrap; gap:0.6rem; align-items:end;">
+        <div>
+          <label class="eyebrow" for="admin-gb">Golden Boot winner</label><br/>
+          <input list="admin-players-datalist" id="admin-gb" placeholder="type a player" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;" />
+          <datalist id="admin-players-datalist"></datalist>
+        </div>
+        <div>
+          <label class="eyebrow" for="admin-champion">Champion</label><br/>
+          <select id="admin-champion" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;"></select>
+        </div>
+        <button id="admin-season-results-save">Save results</button>
+      </div>
+      <div class="msg" id="admin-season-msg"></div>
     </div>
 
     </section><!-- /tab-admin -->

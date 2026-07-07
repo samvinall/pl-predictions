@@ -16,6 +16,7 @@ export const store = {
   multipickEditing: false, // is the Multipick second-team form open?
   myPlayedGws: new Set(),  // gameweeks where my pick actually played (real result)
   names: {},               // uid -> chosen display name (from profiles/{uid})
+  selectTab: null,         // set by initTabs(); selectTab(id) switches tab
   showingDenied: false,    // are we showing the "not on the guest list" screen?
   reload: async () => {},  // set to loadEverything() during boot
 };

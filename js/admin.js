@@ -175,6 +175,67 @@ export function renderAdminNames(players) {
   };
 }
 
+// Admin-only: set the season-predictions lock date, and (at season end) the
+// correct Golden Boot + champion. `players` powers the Golden Boot picker.
+function toLocalInput(d) {
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function setupSeasonAdmin(players, season, results) {
+  const msg = document.getElementById("admin-season-msg");
+  const champSel = document.getElementById("admin-champion");
+  const dInput = document.getElementById("admin-season-deadline");
+  const gbInput = document.getElementById("admin-gb");
+  const dl = document.getElementById("admin-players-datalist");
+  const byLabel = new Map();
+  (players || []).forEach(p => byLabel.set(`${p.name} (${p.team})`, p));
+
+  if (champSel && champSel.options.length === 0) {
+    champSel.innerHTML = `<option value="">— none —</option>` + TEAMS.map(t => `<option value="${t}">${t}</option>`).join("");
+  }
+  if (dl) {
+    dl.innerHTML = (players || []).map(p => `<option value="${`${p.name} (${p.team})`.replace(/"/g, "&quot;")}"></option>`).join("");
+  }
+  if (dInput && season && season.predictionsDeadline && season.predictionsDeadline.toDate) {
+    dInput.value = toLocalInput(season.predictionsDeadline.toDate());
+  }
+  if (gbInput && results && results.goldenBootName) {
+    const p = (players || []).find(x => x.id === results.goldenBootId);
+    gbInput.value = p ? `${p.name} (${p.team})` : results.goldenBootName;
+  }
+  if (champSel && results && results.champion) champSel.value = results.champion;
+
+  const dSave = document.getElementById("admin-season-deadline-save");
+  if (dSave) dSave.onclick = async () => {
+    if (!dInput.value) { msg.textContent = "Pick a date & time."; msg.className = "msg error"; return; }
+    try {
+      await setDoc(doc(db, "config", "season"), { predictionsDeadline: new Date(dInput.value) }, { merge: true });
+      msg.textContent = `Lock set to ${new Date(dInput.value).toLocaleString()}.`;
+      msg.className = "msg ok";
+      await store.reload();
+    } catch (e) { msg.textContent = `Couldn't save: ${e.message}`; msg.className = "msg error"; }
+  };
+
+  const rSave = document.getElementById("admin-season-results-save");
+  if (rSave) rSave.onclick = async () => {
+    const data = {};
+    const gbVal = gbInput.value.trim();
+    if (gbVal) {
+      const p = byLabel.get(gbVal);
+      if (!p) { msg.textContent = "Pick the Golden Boot player from the list."; msg.className = "msg error"; return; }
+      data.goldenBootId = p.id; data.goldenBootName = p.name;
+    }
+    if (champSel.value) data.champion = champSel.value;
+    try {
+      await setDoc(doc(db, "config", "season_results"), data);
+      msg.textContent = "Season results saved.";
+      msg.className = "msg ok";
+      await store.reload();
+    } catch (e) { msg.textContent = `Couldn't save: ${e.message}`; msg.className = "msg error"; }
+  };
+}
+
 function renderAllowlist(emails) {
   const el = document.getElementById("allow-list");
   if (!el) return;

@@ -74,6 +74,78 @@ def parse_fpl_timestamp(ts):
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
+POSITIONS = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
+
+
+def build_players(elements, canon_team):
+    """Turn the FPL bootstrap `elements` into a compact player list for the
+    Golden Boot picker: id, display name, team (canonical), position."""
+    players = []
+    for e in elements:
+        players.append({
+            "id": e["id"],
+            "name": e.get("web_name", "?"),
+            "team": canon_team.get(e.get("team"), "?"),
+            "pos": POSITIONS.get(e.get("element_type"), "?"),
+        })
+    return players
+
+
+def compute_standings(fixtures, canon_team):
+    """Build the league table from all finished fixtures. Returns rows sorted
+    by points, then goal difference, then goals for, then name; each row gets a
+    1-based `position`. Pure -- unit-tested."""
+    table = {}
+
+    def row(team):
+        return table.setdefault(team, {
+            "team": team, "played": 0, "won": 0, "drawn": 0, "lost": 0,
+            "gf": 0, "ga": 0, "points": 0,
+        })
+
+    for fx in fixtures:
+        if not fx.get("finished"):
+            continue
+        hs, as_ = fx.get("team_h_score"), fx.get("team_a_score")
+        if hs is None or as_ is None:
+            continue
+        home = canon_team.get(fx.get("team_h"))
+        away = canon_team.get(fx.get("team_a"))
+        if not home or not away:
+            continue
+        h, a = row(home), row(away)
+        h["played"] += 1; a["played"] += 1
+        h["gf"] += hs; h["ga"] += as_
+        a["gf"] += as_; a["ga"] += hs
+        if hs > as_:
+            h["won"] += 1; h["points"] += 3; a["lost"] += 1
+        elif hs < as_:
+            a["won"] += 1; a["points"] += 3; h["lost"] += 1
+        else:
+            h["drawn"] += 1; a["drawn"] += 1; h["points"] += 1; a["points"] += 1
+
+    rows = list(table.values())
+    for r in rows:
+        r["gd"] = r["gf"] - r["ga"]
+    rows.sort(key=lambda r: (-r["points"], -r["gd"], -r["gf"], r["team"]))
+    for i, r in enumerate(rows):
+        r["position"] = i + 1
+    return rows
+
+
+def compute_top_scorers(elements, canon_team, limit=5):
+    """Top scorers from the FPL bootstrap, most goals first (assists break
+    ties), each with their assist count. Pure -- unit-tested."""
+    scorers = [e for e in elements if e.get("goals_scored", 0)]
+    scorers.sort(key=lambda e: (-e.get("goals_scored", 0), -e.get("assists", 0), e.get("web_name", "")))
+    return [{
+        "name": e.get("web_name", "?"),
+        "team": canon_team.get(e.get("team"), "?"),
+        "goals": e.get("goals_scored", 0),
+        "assists": e.get("assists", 0),
+    } for e in scorers[:limit]]
+
+
 def main():
     import requests
     data = requests.get(FPL_BOOTSTRAP, timeout=15).json()
@@ -87,6 +159,9 @@ def main():
               "outside of the season and will resolve itself once FPL rolls "
               "over to 2026/27.")
         sys.exit(EXIT_STALE_SEASON)
+
+    # Canonical (our-spelling) team names, keyed by FPL team id.
+    canon_team = {t["id"]: (match_team_name(t["name"], set()) or t["name"]) for t in data["teams"]}
 
     events = data["events"]
     now = datetime.now(timezone.utc)
@@ -120,6 +195,21 @@ def main():
     # Refresh the fixtures list for whichever gameweek is now current, so
     # the app can show it (and keep live scores updated as games finish).
     write_fixtures(db, gw_number, team_id_to_name)
+
+    # Mirror the player list (for the Golden Boot picker) and the current
+    # standings + top scorers (for the Season tab). All from data we already
+    # have, plus the full-season fixtures list for the table.
+    db.collection("config").document("players").set({
+        "players": build_players(data["elements"], canon_team),
+        "updated": datetime.now(timezone.utc),
+    })
+    all_fixtures = requests.get(FPL_FIXTURES, timeout=15).json()
+    db.collection("config").document("standings").set({
+        "table": compute_standings(all_fixtures, canon_team),
+        "topScorers": compute_top_scorers(data["elements"], canon_team),
+        "updated": datetime.now(timezone.utc),
+    })
+    print(f"✅ Wrote {len(data['elements'])} players + standings to config/*.")
 
 
 if __name__ == "__main__":

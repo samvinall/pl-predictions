@@ -25,13 +25,40 @@ service cloud.firestore {
       );
     }
 
-    // config/current holds { gameweek: number, deadline: timestamp }, and
-    // config/allowlist holds the guest list. Any signed-in account may read
-    // config so the sign-in gate can look itself up in the allowlist before
-    // it's been admitted; only the admin can write it.
+    // The season-predictions lock (transfer-window close), stored on
+    // config/season. Null if not set yet (predictions open until then).
+    function seasonDeadline() {
+      return exists(/databases/$(database)/documents/config/season)
+        ? get(/databases/$(database)/documents/config/season).data.predictionsDeadline
+        : null;
+    }
+
+    // config holds current gameweek, the guest list, mirrored fixtures /
+    // players / standings, and the season-prediction deadline + results. Any
+    // signed-in account may read config so the sign-in gate can look itself up
+    // in the allowlist before it's been admitted; only the admin can write it
+    // (the sync writes players/standings/fixtures via the Admin SDK, which
+    // bypasses rules).
     match /config/{doc} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // season_picks/{uid} holds one player's GW0 predictions
+    // { uid, name, email, goldenBootId, goldenBootName, champion }. Like weekly
+    // picks, your own is always readable but others' stay hidden until the
+    // predictions deadline passes, and you can only write your own, before the
+    // deadline.
+    match /season_picks/{uid} {
+      allow read: if isAllowed() && (
+        request.auth.uid == uid
+        || (seasonDeadline() != null && request.time >= seasonDeadline())
+      );
+      allow create, update: if isAllowed()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && (seasonDeadline() == null || request.time < seasonDeadline());
+      allow delete: if false;
     }
 
     // results/{gw_team} holds { gameweek, team, result: "win"|"draw"|"loss" }

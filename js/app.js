@@ -11,12 +11,13 @@ import {
 import { ADMIN_EMAIL, UNLOCK_GAMEWEEK } from "./config.js";
 import { store } from "./store.js";
 import { multipickOutcomes } from "./scoring.js";
-import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, loadAllowlist } from "./admin.js";
+import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist } from "./admin.js";
 import {
   startDeadlineCountdown, renderPickPanel, renderSheet,
   renderLeaderboard, renderHistory, renderFixtures, renderThisWeek,
   renderProfile, renderRules,
 } from "./render.js";
+import { renderSeason } from "./season.js";
 import { initTabs } from "./tabs.js";
 
 // View/admin code refreshes by calling store.reload() so it never has to
@@ -205,6 +206,35 @@ async function loadEverything() {
     });
   });
 
+  // ---- Season predictions (GW0) ----
+  const seasonCfg = (await getDoc(doc(db, "config", "season"))).data() || null;
+  const seasonDeadlineTs = seasonCfg && seasonCfg.predictionsDeadline;
+  const seasonDeadline = seasonDeadlineTs && seasonDeadlineTs.toDate ? seasonDeadlineTs.toDate() : null;
+  const seasonOpen = !seasonDeadline || new Date() < seasonDeadline;
+  const seasonResults = (await getDoc(doc(db, "config", "season_results"))).data() || null;
+  const standings = (await getDoc(doc(db, "config", "standings"))).data() || null;
+
+  // Player list powers the Golden Boot picker (while open) and the admin's
+  // result picker (any time), so load it if predictions are open or you're admin.
+  let players = null;
+  if (seasonOpen || store.currentUser.email === ADMIN_EMAIL) {
+    const playersData = (await getDoc(doc(db, "config", "players"))).data();
+    players = playersData ? (playersData.players || []) : null;
+  }
+
+  // Own season pick always readable; everyone's once the deadline passes.
+  let seasonPicks = [];
+  if (seasonOpen) {
+    const mine = (await getDoc(doc(db, "season_picks", store.currentUser.uid))).data();
+    if (mine) seasonPicks = [mine];
+  } else {
+    const all = await getDocs(collection(db, "season_picks"));
+    seasonPicks = all.docs.map(d => d.data()).filter(sp => allowedEmails.has((sp.email || "").toLowerCase()));
+  }
+  const mySeasonPick = seasonPicks.find(sp => sp.uid === store.currentUser.uid) || null;
+
+  if (store.currentUser.email === ADMIN_EMAIL) setupSeasonAdmin(players, seasonCfg, seasonResults);
+
   // Fetch the mirrored fixtures once and share between the fixtures rail and
   // the "This Week" tab (both need this gameweek's fixtures + live scores).
   let fixturesData = null;
@@ -216,8 +246,9 @@ async function loadEverything() {
   renderProfile();
   renderPickPanel(isOpen, myTeamsUsedSinceUnlock);
   renderThisWeek(fixturesData);
+  renderSeason({ open: seasonOpen, deadline: seasonDeadline, results: seasonResults, standings, players, seasonPicks, myPick: mySeasonPick });
   renderSheet(allPicks.filter(p => p.gameweek === store.currentConfig.gameweek), isOpen);
-  renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity);
+  renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity, seasonPicks, seasonResults);
   renderHistory(allPicks, results, goalsByKey, concededByKey, isOpen, popularity);
   renderFixtures(fixturesData);
 }
