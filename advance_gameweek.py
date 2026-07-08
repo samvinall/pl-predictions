@@ -33,14 +33,11 @@ FPL_BOOTSTRAP = "https://fantasy.premierleague.com/api/bootstrap-static/"
 FPL_FIXTURES = "https://fantasy.premierleague.com/api/fixtures/"
 
 
-def write_fixtures(db, gw_number, team_id_to_name):
-    """Write the current gameweek's fixtures to config/fixtures so the web
-    app can display them. The browser can't call the FPL API directly (it
-    serves no CORS headers), so we mirror the fixture list into Firestore
-    here. config/* is already readable by any signed-in user, so no extra
-    security rule is needed."""
-    import requests
-    fixtures = requests.get(FPL_FIXTURES, params={"event": gw_number}, timeout=15).json()
+def build_fixture_rows(fixtures, team_id_to_name):
+    """Turn raw FPL fixture dicts into the compact rows the web app renders,
+    with canonical team names and kickoff order (undated games sort last).
+    Pure -- no network or db -- so it's shared by write_fixtures (one
+    gameweek) and build_schedule (the whole season) and can be unit-tested."""
     unmatched = set()
     rows = []
     for fx in fixtures:
@@ -60,6 +57,41 @@ def write_fixtures(db, gw_number, team_id_to_name):
     # Kick off order; undated fixtures (kickoff None) sort last.
     far_future = datetime.max.replace(tzinfo=timezone.utc)
     rows.sort(key=lambda r: r["kickoff"] or far_future)
+    return rows
+
+
+def build_schedule(events, all_fixtures, team_id_to_name):
+    """Build the whole-season calendar mirrored into config/schedule: a
+    per-gameweek deadline map (keyed by gameweek string, so the security
+    rules can index straight into it) plus each gameweek's fixture rows.
+    This is what lets players look ahead and pre-pick future weeks, with
+    each pick locking at that week's real deadline. Pure -- unit-tested."""
+    deadlines = {
+        str(e["id"]): parse_fpl_timestamp(e["deadline_time"])
+        for e in events if e.get("deadline_time")
+    }
+    by_gw = {}
+    for fx in all_fixtures:
+        gw = fx.get("event")
+        if gw is None:
+            continue   # fixtures not yet assigned to a gameweek
+        by_gw.setdefault(gw, []).append(fx)
+    fixtures_by_gw = {
+        str(gw): build_fixture_rows(fxs, team_id_to_name)
+        for gw, fxs in by_gw.items()
+    }
+    return {"deadlines": deadlines, "fixturesByGw": fixtures_by_gw}
+
+
+def write_fixtures(db, gw_number, team_id_to_name):
+    """Write the current gameweek's fixtures to config/fixtures so the web
+    app can display them. The browser can't call the FPL API directly (it
+    serves no CORS headers), so we mirror the fixture list into Firestore
+    here. config/* is already readable by any signed-in user, so no extra
+    security rule is needed."""
+    import requests
+    fixtures = requests.get(FPL_FIXTURES, params={"event": gw_number}, timeout=15).json()
+    rows = build_fixture_rows(fixtures, team_id_to_name)
 
     db.collection("config").document("fixtures").set({
         "gameweek": gw_number,
@@ -210,6 +242,15 @@ def main():
         "updated": datetime.now(timezone.utc),
     })
     print(f"✅ Wrote {len(data['elements'])} players + standings to config/*.")
+
+    # Mirror the whole-season calendar (per-gameweek deadlines + fixtures) so
+    # the app can let players look ahead and pre-pick future weeks. The
+    # security rules index into the deadlines map to lock each pick at that
+    # week's real kickoff.
+    schedule = build_schedule(events, all_fixtures, team_id_to_name)
+    schedule["updated"] = datetime.now(timezone.utc)
+    db.collection("config").document("schedule").set(schedule)
+    print(f"✅ Wrote schedule for {len(schedule['deadlines'])} gameweeks to config/schedule.")
 
 
 if __name__ == "__main__":

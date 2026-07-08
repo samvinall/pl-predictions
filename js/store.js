@@ -10,7 +10,6 @@ export const store = {
   currentUser: null,
   currentConfig: null,   // { gameweek, deadline }
   myPicks: [],           // all of my picks, any gameweek (for chip usage)
-  myPickThisWeek: null,
   countdownTimer: null,
   scorecardEditing: false, // is the Scorecard score-entry form open?
   multipickEditing: false, // is the Multipick second-team form open?
@@ -19,4 +18,19 @@ export const store = {
   selectTab: null,         // set by initTabs(); selectTab(id) switches tab
   showingDenied: false,    // are we showing the "not on the guest list" screen?
   reload: async () => {},  // set to loadEverything() during boot
+
+  // --- Whole-season calendar + the combined Gameweeks tab ---
+  // schedule: sorted [{ gameweek, deadline: Date|null, fixtures: [...] }] mirrored
+  // from config/schedule; lets the Gameweeks tab scroll through every week and
+  // pre-pick future ones. selectedGameweek is the week that tab is showing.
+  schedule: [],
+  deadlinesByGw: {},       // gameweek(number) -> Date (from config/schedule)
+  selectedGameweek: null,
+  // Datasets cached from the last load so switching weeks in the Gameweeks tab
+  // re-renders instantly without another Firestore read.
+  allPicks: [],
+  results: {},
+  goalsByKey: {},
+  concededByKey: {},
+  popularity: {},
 };

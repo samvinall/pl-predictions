@@ -48,26 +48,43 @@
     <div id="season-nudge" style="display:none;"></div>
 
     <nav class="tab-nav" id="tab-nav" role="tablist">
-      <button class="tab-btn" data-tab="pick" role="tab">Pick</button>
-      <button class="tab-btn" data-tab="thisweek" role="tab">This Week</button>
+      <button class="tab-btn" data-tab="pick" role="tab">Gameweeks</button>
       <button class="tab-btn" data-tab="season" id="tab-btn-season" role="tab">Season</button>
       <button class="tab-btn" data-tab="table" role="tab">Table</button>
-      <button class="tab-btn" data-tab="history" id="tab-btn-history" role="tab" style="display:none;">History</button>
+      <button class="tab-btn" data-tab="settings" role="tab">Settings</button>
       <button class="tab-btn" data-tab="rules" role="tab">Rules</button>
       <button class="tab-btn" data-tab="admin" id="tab-btn-admin" role="tab" style="display:none;">Admin</button>
     </nav>
 
-    <!-- PICK -->
+    <!-- GAMEWEEKS (pick · this week · history, combined) -->
     <section id="tab-pick" class="tab-panel" role="tabpanel">
+      <div class="week-nav" id="week-nav">
+        <button class="ghost week-arrow" id="week-prev" aria-label="Previous gameweek">‹</button>
+        <select id="week-select" aria-label="Choose a gameweek"></select>
+        <button class="ghost week-arrow" id="week-next" aria-label="Next gameweek">›</button>
+        <span class="eyebrow" id="week-status"></span>
+      </div>
       <div class="layout">
       <div class="col-main">
         <div class="card" id="pick-card">
-          <h2>Your Pick</h2>
-          <p class="pick-intro">Choose <strong>one team you think will win their match</strong> this gameweek. A win scores 1 point — doubled if you're the only one who picked them. You can't reuse a team until the gameweek 20 reshuffle.</p>
+          <h2 id="pick-heading">Your Pick</h2>
+          <p class="pick-intro" id="pick-intro">Choose <strong>one team you think will win their match</strong> this gameweek. A win scores 1 point — doubled if you're the only one who picked them. You can't reuse a team until the gameweek 20 reshuffle. You can pick ahead for future weeks too.</p>
           <p class="eyebrow" id="pick-status"></p>
           <div class="team-grid" id="team-grid"></div>
           <div class="chip-row" id="chip-row"></div>
           <div class="msg" id="pick-msg"></div>
+        </div>
+        <div class="card" id="week-results-card">
+          <h2 id="week-results-title">Results</h2>
+          <p class="empty" id="week-results-note"></p>
+          <div class="table-scroll" id="week-results-table">
+            <table>
+              <thead>
+                <tr><th>Player</th><th>Team</th><th>Result</th><th>Pts</th></tr>
+              </thead>
+              <tbody id="week-results-body"></tbody>
+            </table>
+          </div>
         </div>
       </div>
       <aside class="col-side">
@@ -79,26 +96,16 @@
       </div><!-- /layout -->
     </section>
 
-    <!-- THIS WEEK -->
-    <section id="tab-thisweek" class="tab-panel" role="tabpanel">
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="tab-panel" role="tabpanel">
       <div class="card" id="profile-card">
         <h2>Your Display Name</h2>
-        <p class="eyebrow">How you appear on the sheet, league table and history.</p>
+        <p class="eyebrow">How you appear on the sheet, league table and results.</p>
         <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-top:0.5rem;">
           <input id="profile-name" type="text" maxlength="24" placeholder="Your name" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;" />
           <button id="profile-save">Save name</button>
         </div>
         <div class="msg" id="profile-msg"></div>
-      </div>
-
-      <div class="card">
-        <h2>Your Bet This Week</h2>
-        <div id="thisweek-mypick"></div>
-      </div>
-
-      <div class="card">
-        <h2>This Gameweek's Sheet</h2>
-        <div id="sheet-list"></div>
       </div>
     </section>
 
@@ -126,23 +133,6 @@
               <tr><th></th><th>Player</th><th>Pld</th><th>Won</th><th>Form</th><th>PPW</th><th title="Chips played">Chips</th><th title="Points earned from chips (Double Down, Double Chance, Goalfest, Scorecard, Multipick)">Chip pts</th><th title="Points earned from the unique-pick bonus">Bonus pts</th><th>Pts</th></tr>
             </thead>
             <tbody id="leaderboard-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- HISTORY -->
-    <section id="tab-history" class="tab-panel" role="tabpanel">
-      <div class="card" id="history-card">
-        <h2>Gameweek History</h2>
-        <label class="eyebrow" for="history-gw">Look back at a past gameweek</label>
-        <select id="history-gw" style="display:block; margin:0.4rem 0 0.9rem; padding:0.5rem; font-family:'JetBrains Mono',monospace;"></select>
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr><th>Player</th><th>Team</th><th>Result</th><th>Pts</th></tr>
-            </thead>
-            <tbody id="history-body"></tbody>
           </table>
         </div>
       </div>

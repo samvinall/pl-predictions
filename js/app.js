@@ -8,14 +8,13 @@ import {
   signInWithPopup, signOut, onAuthStateChanged,
   doc, getDoc, collection, query, where, getDocs,
 } from "./firebase.js";
-import { ADMIN_EMAIL, UNLOCK_GAMEWEEK } from "./config.js";
+import { ADMIN_EMAIL } from "./config.js";
 import { store } from "./store.js";
 import { multipickOutcomes } from "./scoring.js";
 import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist } from "./admin.js";
 import {
-  startDeadlineCountdown, renderPickPanel, renderSheet,
-  renderLeaderboard, renderHistory, renderFixtures, renderThisWeek,
-  renderProfile, renderRules,
+  startDeadlineCountdown, renderWeek,
+  renderLeaderboard, renderProfile, renderRules,
 } from "./render.js";
 import { renderSeason } from "./season.js";
 import { initTabs } from "./tabs.js";
@@ -171,17 +170,6 @@ async function loadEverything() {
   // The teams a pick occupies: two for a Multipick, otherwise one.
   const teamsOf = p => (p.chip === "multipick" && p.team2 ? [p.team, p.team2] : [p.team]);
 
-  // Teams used in EARLIER weeks this half stay locked (no repeats until the
-  // GW20 reshuffle). A team whose fixture was forfeited (didn't play) is freed
-  // up again rather than wasted. The current week's own pick isn't "used".
-  const myTeamsUsedSinceUnlock = new Set();
-  store.myPicks.forEach(p => {
-    if (p.gameweek >= store.currentConfig.gameweek || p.gameweek >= UNLOCK_GAMEWEEK) return;
-    teamsOf(p).forEach(t => {
-      if (!(results[`${p.gameweek}_${t}`] || []).includes("forfeit")) myTeamsUsedSinceUnlock.add(t);
-    });
-  });
-
   // Gameweeks where my pick actually played (a real win/draw/loss for at least
   // one of its teams). Used to decide which chips have been "spent" this half
   // -- a chip on a forfeited/unplayed week doesn't count and stays re-playable.
@@ -192,8 +180,6 @@ async function loadEverything() {
       : (results[`${p.gameweek}_${p.team}`] || []);
     if (outs.some(o => o === "win" || o === "draw" || o === "loss")) store.myPlayedGws.add(p.gameweek);
   });
-
-  store.myPickThisWeek = store.myPicks.find(p => p.gameweek === store.currentConfig.gameweek) || null;
 
   // How many people picked each team that week -- drives the unique-pick
   // bonus. Computed once here and shared by the leaderboard and history.
@@ -235,20 +221,62 @@ async function loadEverything() {
 
   if (store.currentUser.email === ADMIN_EMAIL) setupSeasonAdmin(players, seasonCfg, seasonResults);
 
-  // Fetch the mirrored fixtures once and share between the fixtures rail and
-  // the "This Week" tab (both need this gameweek's fixtures + live scores).
-  let fixturesData = null;
+  // Whole-season calendar: per-gameweek deadlines + fixtures, mirrored into
+  // config/schedule by advance_gameweek.py. Drives the Gameweeks tab's week
+  // navigator and future-week pre-picking. Falls back to just the current
+  // gameweek if the schedule hasn't been synced yet.
+  let scheduleData = null;
   try {
-    const fxSnap = await getDoc(doc(db, "config", "fixtures"));
-    if (fxSnap.exists()) fixturesData = fxSnap.data();
-  } catch (e) { /* leave null -> "not published yet" */ }
+    const schedSnap = await getDoc(doc(db, "config", "schedule"));
+    if (schedSnap.exists()) scheduleData = schedSnap.data();
+  } catch (e) { /* fall back to current-only below */ }
+  buildSchedule(scheduleData);
+
+  // Keep the datasets around so switching weeks in the Gameweeks tab can
+  // re-render instantly without another Firestore read.
+  store.allPicks = allPicks;
+  store.results = results;
+  store.goalsByKey = goalsByKey;
+  store.concededByKey = concededByKey;
+  store.popularity = popularity;
+
+  // Default the Gameweeks tab to the live week; keep the player's chosen week
+  // across a reload if it's still on the calendar.
+  const validGws = store.schedule.map(s => s.gameweek);
+  if (store.selectedGameweek == null || !validGws.includes(store.selectedGameweek)) {
+    store.selectedGameweek = store.currentConfig.gameweek;
+  }
 
   renderProfile();
-  renderPickPanel(isOpen, myTeamsUsedSinceUnlock);
-  renderThisWeek(fixturesData);
+  renderWeek();
   renderSeason({ open: seasonOpen, deadline: seasonDeadline, results: seasonResults, standings, players, seasonPicks, myPick: mySeasonPick });
-  renderSheet(allPicks.filter(p => p.gameweek === store.currentConfig.gameweek), isOpen);
   renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity, seasonPicks, seasonResults);
-  renderHistory(allPicks, results, goalsByKey, concededByKey, isOpen, popularity);
-  renderFixtures(fixturesData);
+}
+
+// Turn the mirrored config/schedule doc into store.schedule (a sorted list of
+// { gameweek, deadline: Date|null, fixtures }) + store.deadlinesByGw. If the
+// schedule isn't published yet, synthesise a single entry for the current
+// gameweek so the Gameweeks tab still works.
+function buildSchedule(scheduleData) {
+  store.schedule = [];
+  store.deadlinesByGw = {};
+  const deadlines = (scheduleData && scheduleData.deadlines) || {};
+  const fixturesByGw = (scheduleData && scheduleData.fixturesByGw) || {};
+  const gws = new Set(
+    [...Object.keys(deadlines), ...Object.keys(fixturesByGw)].map(k => parseInt(k, 10))
+  );
+  gws.forEach(gw => {
+    const ts = deadlines[String(gw)];
+    const deadline = ts && ts.toDate ? ts.toDate() : null;
+    if (deadline) store.deadlinesByGw[gw] = deadline;
+    store.schedule.push({ gameweek: gw, deadline, fixtures: fixturesByGw[String(gw)] || [] });
+  });
+  // Fallback: no schedule synced yet -> at least offer the current gameweek.
+  const cur = store.currentConfig.gameweek;
+  if (!store.schedule.some(s => s.gameweek === cur)) {
+    const deadline = store.currentConfig.deadline.toDate();
+    store.deadlinesByGw[cur] = deadline;
+    store.schedule.push({ gameweek: cur, deadline, fixtures: [] });
+  }
+  store.schedule.sort((a, b) => a.gameweek - b.gameweek);
 }
