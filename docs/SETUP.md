@@ -442,8 +442,12 @@ Mechanics:
   (computed from the season's finished fixtures + the FPL player stats). The
   player list is mirrored into `config/players`.
 - **Resolution:** at season end, set the actual Golden Boot winner and champion
-  in **Admin → Season Predictions**. Correct predictions get their bonus added
-  to the league table (shown as a ⭐ tag by the player's name).
+  in **Admin → Season Predictions** (`config/season_results`). Season-prediction
+  points are scored **completely separately from the weekly league table** — they
+  never touch the live standings during the season. Once the results are
+  published, a **Final Table** appears on the Season tab combining each player's
+  weekly points and season-prediction points into the definitive end-of-season
+  standings (Weekly + Season = Total).
 
 Data lives in `season_picks/{uid}` (one per player) and `config/season*` docs;
 the only new security rule is for `season_picks` (own is always readable/

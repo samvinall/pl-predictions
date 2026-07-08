@@ -11,9 +11,10 @@ import { store } from "./store.js";
 const playerLabel = p => `${p.name} (${p.team})`;
 const escapeAttr = s => String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 
-// state: { open, deadline (Date|null), results, standings, players, seasonPicks, myPick }
+// state: { open, deadline, results, standings, players, seasonPicks, myPick, finalTable }
 export function renderSeason(state) {
   renderStandings(state.standings);
+  renderFinalTable(state.finalTable);
 
   const body = document.getElementById("season-body");
   const nudge = document.getElementById("season-nudge");
@@ -127,6 +128,27 @@ function lockedHtml(state) {
       }).join("")
     + `</tbody></table></div>`;
   return html;
+}
+
+// End-of-season Final Table: weekly points + season-prediction points combined
+// into the definitive standings. Only shown once the admin has published the
+// season answers (finalTable is null before then), so it can't affect the live
+// weekly league table during the season.
+function renderFinalTable(finalTable) {
+  const card = document.getElementById("final-table-card");
+  const body = document.getElementById("final-table-body");
+  if (!card || !body) return;
+  if (!finalTable || finalTable.length === 0) {
+    card.style.display = "none";
+    body.innerHTML = "";
+    return;
+  }
+  card.style.display = "";
+  body.innerHTML = finalTable.map((r, i) => {
+    const me = store.currentUser && r.email === store.currentUser.email ? ' class="me"' : "";
+    return `<tr${me}><td class="rank rank-${i + 1}">${i + 1}</td><td>${r.name}</td>`
+      + `<td>${r.weekly}</td><td>${r.season || "–"}</td><td><strong>${r.total}</strong></td></tr>`;
+  }).join("");
 }
 
 function renderStandings(standings) {
