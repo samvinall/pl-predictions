@@ -71,30 +71,37 @@ service cloud.firestore {
     // picks/{uid_gwN} holds { uid, name, email, team, gameweek }
     match /picks/{pickId} {
       // A pick is only readable if it's your own, if it belongs to a
-      // gameweek earlier than the one currently open (already played),
-      // or if the current gameweek's deadline has passed. This stops
-      // anyone reading rivals' current-week picks straight out of the
+      // gameweek earlier than the one currently open (already played), or
+      // if it's the current gameweek and that gameweek's deadline has
+      // passed. Future weeks' picks (players can now pre-pick ahead) stay
+      // hidden until that week actually becomes current-and-locked. This
+      // stops anyone reading rivals' unplayed picks straight out of the
       // network tab before kickoff -- they're genuinely hidden, not just
       // hidden in the UI. NB: the client must query picks in a way that
-      // only matches readable docs (see loadEverything in index.html),
-      // because Firestore rejects a query that could return a doc the
-      // rule forbids -- rules filter nothing on their own.
+      // only matches readable docs (see loadEverything in app.js), because
+      // Firestore rejects a query that could return a doc the rule forbids
+      // -- rules filter nothing on their own.
       allow read: if isAllowed() && (
         resource.data.uid == request.auth.uid
         || resource.data.gameweek < get(/databases/$(database)/documents/config/current).data.gameweek
-        || request.time >= get(/databases/$(database)/documents/config/current).data.deadline
+        || (resource.data.gameweek == get(/databases/$(database)/documents/config/current).data.gameweek
+            && request.time >= get(/databases/$(database)/documents/config/current).data.deadline)
       );
 
-      // A pick can be created OR changed (up until the deadline), only by
-      // the account it belongs to, only for the currently open gameweek,
-      // and only before that gameweek's deadline. `resource` is null on
-      // create and the existing doc on update, so the ownership check
-      // covers both cases -- nobody can overwrite someone else's pick.
+      // A pick can be created OR changed, only by the account it belongs
+      // to, only before that gameweek's own deadline. Players may pre-pick
+      // any future gameweek; each pick locks at its week's real kickoff,
+      // read from the per-gameweek deadline map in config/schedule (keyed
+      // by gameweek string). Past weeks' deadlines have passed so they're
+      // refused; an unknown gameweek is refused by the `in` guard.
+      // `resource` is null on create and the existing doc on update, so the
+      // ownership check covers both cases -- nobody can overwrite someone
+      // else's pick.
       allow create, update: if isAllowed()
         && request.resource.data.uid == request.auth.uid
         && (resource == null || resource.data.uid == request.auth.uid)
-        && request.resource.data.gameweek == get(/databases/$(database)/documents/config/current).data.gameweek
-        && request.time < get(/databases/$(database)/documents/config/current).data.deadline;
+        && string(request.resource.data.gameweek) in get(/databases/$(database)/documents/config/schedule).data.deadlines
+        && request.time < get(/databases/$(database)/documents/config/schedule).data.deadlines[string(request.resource.data.gameweek)];
 
       allow delete: if false;
     }

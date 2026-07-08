@@ -144,6 +144,30 @@
   #signin-gate p{ color:var(--muted); max-width:40ch; margin:0.8rem auto 1.4rem; }
   .pick-intro{ color:var(--muted); font-size:0.9rem; margin:0 0 0.8rem; }
   .pick-intro strong{ color:var(--ink); }
+  /* Week navigator on the Gameweeks tab */
+  .week-nav{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:0.6rem;
+    margin-bottom:1.1rem;
+  }
+  .week-nav select{
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.9rem;
+    padding:0.5rem 0.7rem;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:#fff8ea;
+    color:var(--ink);
+    min-width:12rem;
+  }
+  .week-arrow{
+    font-size:1.2rem;
+    line-height:1;
+    padding:0.35rem 0.7rem;
+  }
+  #week-status{ flex:1; min-width:12rem; }
   .team-grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(140px,1fr));

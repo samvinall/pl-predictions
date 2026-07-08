@@ -73,5 +73,65 @@ class TestBuildPlayers(unittest.TestCase):
         )
 
 
+class TestBuildFixtureRows(unittest.TestCase):
+    def setUp(self):
+        # FPL raw team names; match_team_name maps them to our canonical spelling.
+        self.names = {10: "Man City", 11: "Spurs", 12: "Arsenal"}
+
+    def test_maps_names_scores_and_flags(self):
+        rows = ag.build_fixture_rows([
+            {"team_h": 10, "team_a": 11, "kickoff_time": "2026-08-21T19:00:00Z",
+             "team_h_score": 2, "team_a_score": 1, "finished": True, "started": True},
+        ], self.names)
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual(r["home"], "Manchester City")
+        self.assertEqual(r["away"], "Tottenham Hotspur")
+        self.assertEqual((r["home_score"], r["away_score"]), (2, 1))
+        self.assertTrue(r["finished"] and r["started"])
+        self.assertIsNotNone(r["kickoff"])
+
+    def test_sorts_by_kickoff_undated_last(self):
+        rows = ag.build_fixture_rows([
+            {"team_h": 10, "team_a": 11, "kickoff_time": None},
+            {"team_h": 12, "team_a": 10, "kickoff_time": "2026-08-21T12:30:00Z"},
+            {"team_h": 11, "team_a": 12, "kickoff_time": "2026-08-20T19:00:00Z"},
+        ], self.names)
+        # Earliest kickoff first; the undated (kickoff None) fixture sorts last.
+        self.assertEqual([r["home"] for r in rows], ["Tottenham Hotspur", "Arsenal", "Manchester City"])
+        self.assertIsNone(rows[-1]["kickoff"])
+
+
+class TestBuildSchedule(unittest.TestCase):
+    def setUp(self):
+        self.names = {10: "Man City", 11: "Spurs", 12: "Arsenal"}
+        self.events = [
+            {"id": 1, "deadline_time": "2026-08-14T17:30:00Z"},
+            {"id": 2, "deadline_time": "2026-08-21T17:30:00Z"},
+        ]
+
+    def test_deadlines_keyed_by_gameweek_string(self):
+        sched = ag.build_schedule(self.events, [], self.names)
+        self.assertEqual(set(sched["deadlines"].keys()), {"1", "2"})
+        # Values are parsed datetimes, not raw strings.
+        self.assertEqual(sched["deadlines"]["1"].year, 2026)
+
+    def test_fixtures_grouped_by_event_string(self):
+        fixtures = [
+            {"event": 1, "team_h": 10, "team_a": 11, "kickoff_time": "2026-08-14T19:00:00Z"},
+            {"event": 2, "team_h": 12, "team_a": 10, "kickoff_time": "2026-08-21T19:00:00Z"},
+            {"event": None, "team_h": 11, "team_a": 12, "kickoff_time": None},  # unassigned -> skipped
+        ]
+        sched = ag.build_schedule(self.events, fixtures, self.names)
+        self.assertEqual(set(sched["fixturesByGw"].keys()), {"1", "2"})
+        self.assertEqual(sched["fixturesByGw"]["1"][0]["home"], "Manchester City")
+        self.assertEqual(sched["fixturesByGw"]["2"][0]["away"], "Manchester City")
+
+    def test_event_without_deadline_ignored(self):
+        events = self.events + [{"id": 3}]  # no deadline_time
+        sched = ag.build_schedule(events, [], self.names)
+        self.assertNotIn("3", sched["deadlines"])
+
+
 if __name__ == "__main__":
     unittest.main()

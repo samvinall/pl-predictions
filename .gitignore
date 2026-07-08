@@ -13,3 +13,4 @@ env/
 *.swp
 .idea/
 .vscode/
+.claude/

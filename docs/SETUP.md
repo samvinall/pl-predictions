@@ -363,18 +363,22 @@ against"** boxes for the same purpose. If goals are unknown for a result
 (older data, or left blank), Goalfest falls back to scoring that week as
 an ordinary win, and Scorecard simply can't register a hit.
 
-## Fixtures list
+## Fixtures list & schedule
 
-`advance_gameweek.py` mirrors the current gameweek's fixtures into
-`config/fixtures` (the browser can't call the FPL API directly — it
-serves no CORS headers). The app reads that doc to show the fixtures
-rail, with live scores as games finish. `config/*` is already readable
+`advance_gameweek.py` mirrors the whole-season calendar — per-gameweek
+deadlines and fixtures — into `config/schedule` (the browser can't call the
+FPL API directly; it serves no CORS headers). The **Gameweeks** tab reads that
+doc to show each week's fixtures and to let players pre-pick future weeks, with
+live scores as games finish. The firestore rules also index into
+`config/schedule.deadlines` to lock each pick at its week's real kickoff.
+`config/current` still tracks which week is live, and `config/fixtures` (the
+current week only) is kept for backwards-compatibility. `config/*` is readable
 by any signed-in user, so no extra security rule is needed.
 
 ## Custom display names
 
-Each player can set a display name on the **This Week** tab (overrides their
-Google account name everywhere — sheet, table, history). The admin can also
+Each player can set a display name on the **Settings** tab (overrides their
+Google account name everywhere — sheet, table, results). The admin can also
 override any name from the **Admin** tab. Names live in `profiles/{uid}` and
 are resolved at render time, so a change applies retroactively to past
 gameweeks too.
