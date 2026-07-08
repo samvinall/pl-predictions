@@ -439,15 +439,36 @@ function renderFixtures(gw) {
   }).join("");
 }
 
+// Apply a pick change to the in-memory datasets so the UI can update instantly
+// without re-reading everything from Firestore. `data` is the new pick (or null
+// to remove it). Changing an open week's pick affects nothing scored, so this
+// is all the state a re-render needs.
+function applyMyPickLocally(gw, data) {
+  const uid = store.currentUser.uid;
+  store.myPicks = store.myPicks.filter(p => p.gameweek !== gw);
+  store.allPicks = store.allPicks.filter(p => !(p.uid === uid && p.gameweek === gw));
+  if (data) { store.myPicks.push(data); store.allPicks.push(data); }
+}
+
+// Persist a pick write in the background: the local state + UI have already
+// updated optimistically, so we only need to catch a failure and re-sync.
+async function persist(writePromise, msg, okText) {
+  msg.textContent = okText;
+  msg.className = "msg ok";
+  try {
+    await writePromise;
+  } catch (e) {
+    msg.textContent = `Couldn't save: ${e.message}`;
+    msg.className = "msg error";
+    await store.reload();   // fall back to server truth on failure
+  }
+}
+
 // Write (or change) my pick for a given gameweek. Works for the current week
 // and any future week that's still before its own deadline -- the security
 // rules enforce the deadline per gameweek. Keeps any chip already played.
-async function submitPick(gw, team) {
-  const msg = document.getElementById("pick-msg");
-  msg.textContent = "Submitting...";
-  msg.className = "msg";
+function submitPick(gw, team) {
   const existing = myPickFor(gw);
-  const pickId = `${store.currentUser.uid}_gw${gw}`;
   const data = {
     uid: store.currentUser.uid,
     name: store.currentUser.displayName,
@@ -462,41 +483,28 @@ async function submitPick(gw, team) {
   if (existing?.chip === "multipick" && existing.team2 && existing.team2 !== team) {
     data.team2 = existing.team2;
   }
-  try {
-    await setDoc(doc(db, "picks", pickId), data);
-    msg.textContent = `Pick submitted: ${team}`;
-    msg.className = "msg ok";
-    await store.reload();
-  } catch (e) {
-    msg.textContent = `Couldn't submit: ${e.message}`;
-    msg.className = "msg error";
-  }
+  applyMyPickLocally(gw, data);
+  store.scorecardEditing = false;
+  store.multipickEditing = false;
+  renderWeek();
+  persist(setDoc(doc(db, "picks", `${store.currentUser.uid}_gw${gw}`), data),
+          document.getElementById("pick-msg"), `Pick submitted: ${team}`);
 }
 
 // Remove ("unselect") my pick for a gameweek. Only reachable before that
 // week's deadline; the rules enforce the same. Frees the team + any chip.
-async function clearPick(gw) {
-  const msg = document.getElementById("pick-msg");
-  msg.textContent = "Removing pick…";
-  msg.className = "msg";
-  try {
-    await deleteDoc(doc(db, "picks", `${store.currentUser.uid}_gw${gw}`));
-    msg.textContent = "Pick removed.";
-    msg.className = "msg ok";
-    await store.reload();
-  } catch (e) {
-    msg.textContent = `Couldn't remove pick: ${e.message}`;
-    msg.className = "msg error";
-  }
+function clearPick(gw) {
+  applyMyPickLocally(gw, null);
+  store.scorecardEditing = false;
+  store.multipickEditing = false;
+  renderWeek();
+  persist(deleteDoc(doc(db, "picks", `${store.currentUser.uid}_gw${gw}`)),
+          document.getElementById("pick-msg"), "Pick removed.");
 }
 
-async function setChip(gw, chip, scorecard, team2) {
+function setChip(gw, chip, scorecard, team2) {
   const existing = myPickFor(gw);
   if (!existing) return;
-  const msg = document.getElementById("pick-msg");
-  msg.textContent = "Updating chip…";
-  msg.className = "msg";
-  const pickId = `${store.currentUser.uid}_gw${gw}`;
   const data = {
     uid: store.currentUser.uid,
     name: store.currentUser.displayName,
@@ -507,23 +515,19 @@ async function setChip(gw, chip, scorecard, team2) {
   if (chip) data.chip = chip;   // omitting the field clears the chip
   if (chip === "scorecard" && scorecard) data.scorecard = scorecard;
   if (chip === "multipick" && team2) data.team2 = team2;
-  try {
-    await setDoc(doc(db, "picks", pickId), data);
-    store.scorecardEditing = false;
-    store.multipickEditing = false;
-    msg.textContent = chip
-      ? (chip === "scorecard"
-          ? `Scorecard set: ${scorecard.for}–${scorecard.against}`
-          : chip === "multipick"
-            ? `Multipick set: ${existing.team} + ${team2}`
-            : `Chip set: ${CHIPS[chip].label}`)
-      : "Chip cleared.";
-    msg.className = "msg ok";
-    await store.reload();
-  } catch (e) {
-    msg.textContent = `Couldn't update chip: ${e.message}`;
-    msg.className = "msg error";
-  }
+  applyMyPickLocally(gw, data);
+  store.scorecardEditing = false;
+  store.multipickEditing = false;
+  renderWeek();
+  const okText = chip
+    ? (chip === "scorecard"
+        ? `Scorecard set: ${scorecard.for}–${scorecard.against}`
+        : chip === "multipick"
+          ? `Multipick set: ${existing.team} + ${team2}`
+          : `Chip set: ${CHIPS[chip].label}`)
+    : "Chip cleared.";
+  persist(setDoc(doc(db, "picks", `${store.currentUser.uid}_gw${gw}`), data),
+          document.getElementById("pick-msg"), okText);
 }
 
 // Weekly league totals per player (email -> {name, points, played, won, ...}),
