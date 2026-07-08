@@ -4,7 +4,7 @@
 // scorers panel. Predictions lock at the transfer-window close and are hidden
 // from others until then (enforced in firestore.rules).
 // ---------------------------------------------------------------------------
-import { TEAMS } from "./config.js";
+import { TEAMS, GOLDEN_BOOT_BONUS, CHAMPION_BONUS, BONUS_MULTIPLIER } from "./config.js";
 import { db, doc, setDoc } from "./firebase.js";
 import { store } from "./store.js";
 
@@ -59,9 +59,9 @@ function pickerHtml(my, players, deadline) {
     + players.map(p => `<option value="${escapeAttr(playerLabel(p))}"></option>`).join("")
     + `</datalist>`
     + `<div style="display:flex; flex-wrap:wrap; gap:0.8rem; align-items:end; margin-top:0.6rem;">`
-    + `<div><label class="eyebrow" for="gb-input">Golden Boot — top scorer (10 pts, 20 if unique)</label><br/>`
+    + `<div><label class="eyebrow" for="gb-input">Golden Boot — top scorer (${GOLDEN_BOOT_BONUS} pts, ${GOLDEN_BOOT_BONUS * BONUS_MULTIPLIER} if unique)</label><br/>`
     + `<input list="players-datalist" id="gb-input" value="${escapeAttr(gbLabel)}" placeholder="type a player" style="padding:0.5rem; font-family:'JetBrains Mono',monospace; min-width:15rem;" /></div>`
-    + `<div><label class="eyebrow" for="champ-input">Champion (5 pts, 10 if unique)</label><br/>`
+    + `<div><label class="eyebrow" for="champ-input">Champion (${CHAMPION_BONUS} pts, ${CHAMPION_BONUS * BONUS_MULTIPLIER} if unique)</label><br/>`
     + `<select id="champ-input" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;">`
     + `<option value="">— none —</option>`
     + TEAMS.map(t => `<option value="${t}"${t === champ ? " selected" : ""}>${t}</option>`).join("")
