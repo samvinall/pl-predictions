@@ -677,12 +677,25 @@ export function renderProfile() {
   };
 }
 
-// Fill the Rules tab's chip list straight from CHIPS, so it can never drift
-// from the actual game. The prose alongside it lives in index.html.
+// Fill the Rules tab's dynamic bits (chip list + season-prediction points)
+// straight from config, so they can never drift from the actual game. The
+// surrounding prose lives in index.html.
 export function renderRules() {
-  const el = document.getElementById("rules-chips");
-  if (!el) return;
-  el.innerHTML = Object.entries(CHIPS)
-    .map(([id, meta]) => `<p class="chip-desc"><span class="chip-tag chip-${id}">${meta.label}</span> ${meta.desc}</p>`)
-    .join("");
+  const chips = document.getElementById("rules-chips");
+  if (chips) {
+    chips.innerHTML = Object.entries(CHIPS)
+      .map(([id, meta]) => `<p class="chip-desc"><span class="chip-tag chip-${id}">${meta.label}</span> ${meta.desc}</p>`)
+      .join("");
+  }
+  const season = document.getElementById("rules-season");
+  if (season) {
+    const gbU = GOLDEN_BOOT_BONUS * BONUS_MULTIPLIER;
+    const chU = CHAMPION_BONUS * BONUS_MULTIPLIER;
+    season.innerHTML = `<ul class="rules-list">
+      <li>Before the season kicks off, predict the <strong>Golden Boot</strong> winner (the league's top scorer) and, optionally, the <strong>champion</strong>. Set them on the <strong>Season</strong> tab; changeable until the transfer window shuts, then locked.</li>
+      <li><strong>Golden Boot:</strong> ${GOLDEN_BOOT_BONUS} pts if you call it right — <strong>${gbU}</strong> if you're the only one who did.</li>
+      <li><strong>Champion:</strong> ${CHAMPION_BONUS} pts if right — <strong>${chU}</strong> if unique.</li>
+      <li>Predictions stay <strong>hidden</strong> from everyone else until the lock, and they don't touch the weekly table — they're added only in the end-of-season Final Table.</li>
+    </ul>`;
+  }
 }
