@@ -8,7 +8,6 @@ import { TEAMS, GOLDEN_BOOT_BONUS, CHAMPION_BONUS, BONUS_MULTIPLIER } from "./co
 import { db, doc, setDoc } from "./firebase.js";
 import { store } from "./store.js";
 
-const playerLabel = p => `${p.name} (${p.team})`;
 const escapeAttr = s => String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 
 // state: { open, deadline, results, standings, players, seasonPicks, myPick, finalTable }
@@ -44,6 +43,17 @@ export function renderSeason(state) {
   if (state.open) wirePicker(state.players);
 }
 
+// Player <option>s for one team (alphabetical), with position shown, and the
+// current pick pre-selected. Shared by the initial render and the team-change
+// handler so the two never drift.
+function playerOptions(players, team, selectedId) {
+  const inTeam = (players || [])
+    .filter(p => p.team === team)
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  return `<option value="">— player —</option>`
+    + inTeam.map(p => `<option value="${p.id}"${p.id === selectedId ? " selected" : ""}>${escapeAttr(p.name)}${p.pos ? ` (${p.pos})` : ""}</option>`).join("");
+}
+
 function pickerHtml(my, players, deadline) {
   const dl = deadline ? ` Locks ${deadline.toLocaleString()}.` : "";
   let html = `<p class="eyebrow">Pick the season's top scorer and (optionally) the champion. Changeable until the transfer window shuts, hidden from everyone else until then.${dl}</p>`;
@@ -51,18 +61,24 @@ function pickerHtml(my, players, deadline) {
     html += `<p class="empty">The player list hasn't been published yet — check back shortly.</p>`;
     return html;
   }
-  const gbLabel = my && my.goldenBootId != null
-    ? (players.find(p => p.id === my.goldenBootId) ? playerLabel(players.find(p => p.id === my.goldenBootId)) : my.goldenBootName)
-    : "";
+  const myPlayer = my && my.goldenBootId != null ? players.find(p => p.id === my.goldenBootId) : null;
+  const myTeam = myPlayer ? myPlayer.team : "";
   const champ = my?.champion || "";
-  html += `<datalist id="players-datalist">`
-    + players.map(p => `<option value="${escapeAttr(playerLabel(p))}"></option>`).join("")
-    + `</datalist>`
-    + `<div style="display:flex; flex-wrap:wrap; gap:0.8rem; align-items:end; margin-top:0.6rem;">`
-    + `<div><label class="eyebrow" for="gb-input">Golden Boot — top scorer (${GOLDEN_BOOT_BONUS} pts, ${GOLDEN_BOOT_BONUS * BONUS_MULTIPLIER} if unique)</label><br/>`
-    + `<input list="players-datalist" id="gb-input" value="${escapeAttr(gbLabel)}" placeholder="type a player" style="padding:0.5rem; font-family:'JetBrains Mono',monospace; min-width:15rem;" /></div>`
+  const teams = [...new Set(players.map(p => p.team))].sort();
+  const inputStyle = "padding:0.5rem; font-family:'JetBrains Mono',monospace;";
+  html += `<div style="display:flex; flex-wrap:wrap; gap:0.8rem; align-items:end; margin-top:0.6rem;">`
+    // Golden Boot: pick a team first, then a player from that team.
+    + `<div><label class="eyebrow" for="gb-team">Golden Boot — team (${GOLDEN_BOOT_BONUS} pts, ${GOLDEN_BOOT_BONUS * BONUS_MULTIPLIER} if unique)</label><br/>`
+    + `<select id="gb-team" style="${inputStyle}">`
+    + `<option value="">— team —</option>`
+    + teams.map(t => `<option value="${escapeAttr(t)}"${t === myTeam ? " selected" : ""}>${t}</option>`).join("")
+    + `</select></div>`
+    + `<div><label class="eyebrow" for="gb-player">Player</label><br/>`
+    + `<select id="gb-player" style="${inputStyle} min-width:12rem;"${myTeam ? "" : " disabled"}>`
+    + playerOptions(players, myTeam, my ? my.goldenBootId : null)
+    + `</select></div>`
     + `<div><label class="eyebrow" for="champ-input">Champion (${CHAMPION_BONUS} pts, ${CHAMPION_BONUS * BONUS_MULTIPLIER} if unique)</label><br/>`
-    + `<select id="champ-input" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;">`
+    + `<select id="champ-input" style="${inputStyle}">`
     + `<option value="">— none —</option>`
     + TEAMS.map(t => `<option value="${t}"${t === champ ? " selected" : ""}>${t}</option>`).join("")
     + `</select></div>`
@@ -74,16 +90,20 @@ function pickerHtml(my, players, deadline) {
 function wirePicker(players) {
   const saveBtn = document.getElementById("season-save");
   if (!saveBtn) return;
-  const byLabel = new Map((players || []).map(p => [playerLabel(p), p]));
+  const teamSel = document.getElementById("gb-team");
+  const playerSel = document.getElementById("gb-player");
+  const byId = new Map((players || []).map(p => [String(p.id), p]));
+  // Changing the team repopulates the player list (and clears the selection).
+  if (teamSel && playerSel) {
+    teamSel.onchange = () => {
+      playerSel.innerHTML = playerOptions(players, teamSel.value, null);
+      playerSel.disabled = !teamSel.value;
+    };
+  }
   saveBtn.onclick = async () => {
     const msg = document.getElementById("season-msg");
-    const gbVal = document.getElementById("gb-input").value.trim();
     const champ = document.getElementById("champ-input").value;
-    let gb = null;
-    if (gbVal) {
-      gb = byLabel.get(gbVal);
-      if (!gb) { msg.textContent = "Pick your Golden Boot player from the list."; msg.className = "msg error"; return; }
-    }
+    const gb = playerSel && playerSel.value ? byId.get(String(playerSel.value)) : null;
     if (!gb && !champ) { msg.textContent = "Make at least one prediction."; msg.className = "msg error"; return; }
     const data = { uid: store.currentUser.uid, email: store.currentUser.email, name: store.currentUser.displayName };
     if (gb) { data.goldenBootId = gb.id; data.goldenBootName = gb.name; }
