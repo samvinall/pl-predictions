@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // All the view code: the combined Gameweeks tab (week navigator + per-week
-// pick UI, fixtures and results), the league table, and the two write actions
-// (submitPick / setChip) the pick UI triggers. Reads shared state from `store`
-// and refreshes via store.reload() after a write, so it never imports the
-// controller directly.
+// pick UI, fixtures and results), the league table, and the write action
+// (savePick) the pick UI triggers once you Save a staged draft. Reads shared
+// state from `store` and refreshes via store.reload() only when needed, so it
+// never imports the controller directly.
 // ---------------------------------------------------------------------------
 import {
   TEAMS, CHIPS, BONUS_MULTIPLIER, SCORECARD_BONUS,
@@ -102,9 +102,37 @@ function teamsUsedForWeek(gw) {
 
 function selectWeek(gw) {
   store.selectedGameweek = gw;
-  store.scorecardEditing = false;
-  store.multipickEditing = false;
-  renderWeek();
+  renderWeek();   // ensureDraft() re-inits the draft for the new week (discards any unsaved edits)
+}
+
+// --- Draft (staged) pick helpers -------------------------------------------
+// The draft is a local working copy of the selected week's pick. It only
+// becomes real on Save; switching week rebuilds it from that week's saved pick.
+function draftFromPick(gw) {
+  const p = myPickFor(gw);
+  return {
+    gw,
+    team: p?.team || null,
+    chip: p?.chip || null,
+    scorecard: p?.scorecard ? { for: p.scorecard.for, against: p.scorecard.against } : null,
+    team2: p?.team2 || null,
+  };
+}
+function ensureDraft(gw) {
+  if (!store.draft || store.draft.gw !== gw) store.draft = draftFromPick(gw);
+  return store.draft;
+}
+function pickSig(team, chip, team2, scorecard) {
+  if (!team) return "none";
+  let s = `${team}|${chip || ""}`;
+  if (chip === "multipick") s += `|${team2 || ""}`;
+  if (chip === "scorecard") s += `|${scorecard ? `${scorecard.for}-${scorecard.against}` : ""}`;
+  return s;
+}
+function draftDirty(gw) {
+  const d = store.draft, p = myPickFor(gw);
+  return pickSig(d.team, d.chip, d.team2, d.scorecard)
+       !== pickSig(p?.team || null, p?.chip || null, p?.team2 || null, p?.scorecard || null);
 }
 
 function renderNavigator(gw) {
@@ -148,81 +176,88 @@ export function renderWeek() {
 }
 
 // The pick card for the selected week. Open weeks (current or future) get the
-// full team grid + chip row; locked weeks show a one-line summary of your own
-// pick (the results table below reveals everyone).
+// full team grid + chip row + Save/Discard, all driven by the local draft;
+// locked weeks show a one-line summary (the results table reveals everyone).
 function renderPickPanel(gw, open, usedTeams) {
   const grid = document.getElementById("team-grid");
   const statusEl = document.getElementById("pick-status");
   const heading = document.getElementById("pick-heading");
   const intro = document.getElementById("pick-intro");
   const chipRow = document.getElementById("chip-row");
+  const curEl = document.getElementById("current-selection");
+  const actions = document.getElementById("pick-actions");
   const msg = document.getElementById("pick-msg");
-  const mp = myPickFor(gw);
+  const saved = myPickFor(gw);
   grid.innerHTML = "";
+
+  // "Current selection" box: always what's actually SAVED (never the draft).
+  if (curEl) {
+    if (saved) {
+      const t = saved.chip === "multipick" && saved.team2 ? `${saved.team} + ${saved.team2}` : saved.team;
+      curEl.innerHTML = `<span class="cs-label">Current selection</span><span class="cs-pick"><strong>${t}</strong>${chipTag(saved.chip, saved.scorecard)}</span>`;
+    } else {
+      curEl.innerHTML = `<span class="cs-label">Current selection</span><span class="cs-pick empty">nothing saved for GW${gw} yet</span>`;
+    }
+  }
 
   if (!open) {
     heading.textContent = `Gameweek ${gw}`;
     intro.style.display = "none";
     grid.style.display = "none";
     chipRow.style.display = "none";
+    if (actions) actions.style.display = "none";
     if (msg) msg.textContent = "";
-    if (mp) {
-      const team = mp.chip === "multipick" && mp.team2 ? `${mp.team} + ${mp.team2}` : mp.team;
-      statusEl.innerHTML = `Your pick: <strong>${team}</strong>${chipTag(mp.chip, mp.scorecard)}`;
-    } else {
-      statusEl.textContent = "You didn't pick this week.";
-    }
+    statusEl.textContent = saved ? "This gameweek is locked — your pick is final." : "You didn't pick this week.";
     return;
   }
 
+  const d = ensureDraft(gw);
   heading.textContent = isCurrentGw(gw) ? "Your Pick" : `Pick ahead · Gameweek ${gw}`;
   intro.style.display = "";
   grid.style.display = "";
   chipRow.style.display = "";
+  if (actions) actions.style.display = "";
 
-  if (mp) {
-    statusEl.textContent = `Current pick: ${mp.team} for GW${gw} — change it anytime before the deadline.`;
-  } else {
-    statusEl.textContent = isCurrentGw(gw)
-      ? "Pick a team you think will win — change it anytime before kickoff of the first match."
-      : `Pick ahead for GW${gw} — you can change it right up to that week's deadline.`;
-  }
+  const dirty = draftDirty(gw);
+  statusEl.textContent = dirty
+    ? "Unsaved changes — press Save to lock them in."
+    : (saved ? "Change your team or chip below, then Save."
+             : `Choose a team${isCurrentGw(gw) ? "" : " to pre-pick"}, then press Save.`);
 
-  const isMine = (team) => mp && (mp.team === team || (mp.chip === "multipick" && mp.team2 === team));
+  const isMine = (team) => d.team === team || (d.chip === "multipick" && d.team2 === team);
   TEAMS.forEach(team => {
     const locked = usedTeams.has(team);
-    const chip = document.createElement("button");
-    chip.className = "team-chip" + (locked ? " locked" : "") + (isMine(team) ? " selected" : "");
-    // Clicking your current primary pick again clears it (unselect); a
-    // used team is disabled; anything else selects it.
-    const isPrimary = mp && mp.team === team;
-    chip.innerHTML = `<span>${team}</span>`
+    const btn = document.createElement("button");
+    const isPrimary = d.team === team;
+    btn.className = "team-chip" + (locked ? " locked" : "") + (isMine(team) ? " selected" : "");
+    // Clicking your currently-drafted team again clears it; a used team is
+    // disabled; anything else stages it. Nothing writes until Save.
+    btn.innerHTML = `<span>${team}</span>`
       + (locked ? `<span class="lock-note">used</span>` : isPrimary ? `<span class="lock-note">tap to clear</span>` : "");
-    chip.disabled = locked;
-    chip.onclick = isPrimary ? () => clearPick(gw) : () => submitPick(gw, team);
-    grid.appendChild(chip);
+    btn.disabled = locked;
+    btn.onclick = () => {
+      if (d.team === team) { d.team = null; d.chip = null; d.scorecard = null; d.team2 = null; }
+      else d.team = team;
+      renderWeek();
+    };
+    grid.appendChild(btn);
   });
 
-  renderChipRow(gw, open, usedTeams);
+  renderChipRow(gw, usedTeams);
+  renderPickActions(gw, dirty);
 }
 
-function renderChipRow(gw, open, usedTeams) {
+// Chip picker for the draft. Selecting a chip / editing its form just updates
+// the draft (no write); the Save button persists everything at once.
+function renderChipRow(gw, usedTeams) {
   const row = document.getElementById("chip-row");
   const half = halfOf(gw);
-  const myPick = myPickFor(gw);
-  const activeChip = myPick?.chip || null;
-  // While a chip's entry form is open (clicked, but not yet played), show that
-  // chip as highlighted. Purely visual -- nothing is saved and the "Chip set"
-  // message is untouched until the form's play button is pressed.
-  const editingChip = store.scorecardEditing ? "scorecard"
-    : store.multipickEditing ? "multipick"
-    : null;
-  const displayActive = editingChip || activeChip;
+  const d = store.draft;
+  const displayActive = d.chip || null;
+  const hasTeam = !!d.team;
 
-  // Which chips have I already spent in this half? A chip is reserved as soon
-  // as it's played on another week (including a future pre-pick), just like a
-  // team -- so you can't put the same chip on two weeks. Only a forfeited /
-  // abandoned week frees its chip up again to be re-played.
+  // Chips reserved by OTHER (saved) weeks this half -- can't be reused. A
+  // forfeited week frees its chip up again.
   const spentThisHalf = {};
   store.myPicks.forEach(p => {
     if (p.gameweek === gw || halfOf(p.gameweek) !== half || !p.chip) return;
@@ -231,111 +266,87 @@ function renderChipRow(gw, open, usedTeams) {
   });
 
   let html = `<span class="chip-label">Chip — one per week, each usable once per half (H${half})</span>`;
-
-  // "No chip" clears whatever is set this week.
-  html += `<button class="chip-btn${displayActive ? "" : " selected"}" `
-    + `data-chip="" ${(!open || !myPick) ? "disabled" : ""}>No chip</button>`;
-
+  html += `<button class="chip-btn${displayActive ? "" : " selected"}" data-chip="" ${hasTeam ? "" : "disabled"}>No chip</button>`;
   Object.entries(CHIPS).forEach(([id, meta]) => {
     const selected = displayActive === id;
     const spentOn = spentThisHalf[id];
-    const lockedElsewhere = spentOn && !selected;   // used on another week this half
-    const disabled = !open || !myPick || lockedElsewhere;
+    const lockedElsewhere = spentOn && !selected;
+    const disabled = !hasTeam || lockedElsewhere;
     html += `<button class="chip-btn${selected ? " selected" : ""}" data-chip="${id}" `
       + `title="${meta.desc}" ${disabled ? "disabled" : ""}>${meta.label}`
       + (lockedElsewhere ? `<span class="used">used GW${spentOn}</span>` : "")
       + `</button>`;
   });
 
-  // Spell out what the active chip does, in full, once it's selected --
-  // the button title only shows on hover, this stays put.
   if (displayActive && CHIPS[displayActive]) {
     html += `<p class="chip-desc"><strong>${CHIPS[displayActive].label}:</strong> ${CHIPS[displayActive].desc}</p>`;
   }
 
-  // Scorecard needs a predicted scoreline. Show the entry form when
-  // it's the active chip, or when the player has just clicked it.
-  const showScorecard = (activeChip === "scorecard" || store.scorecardEditing) && myPick && open;
-  if (showScorecard) {
-    const sc = myPick?.scorecard || {};
+  // Scorecard: predicted scoreline, bound to the draft (no separate save).
+  if (displayActive === "scorecard" && hasTeam) {
+    const sc = d.scorecard || {};
     html += `<div class="scorecard-form">`
-      + `<span class="chip-label" style="margin:0;">Exact score — predict ${myPick.team}'s result</span>`
-      + `<span>${myPick.team}</span>`
+      + `<span class="chip-label" style="margin:0;">Exact score — predict ${d.team}'s result</span>`
+      + `<span>${d.team}</span>`
       + `<input id="sc-for" type="number" min="0" max="20" value="${sc.for ?? ""}" />`
       + `<span>–</span>`
       + `<input id="sc-against" type="number" min="0" max="20" value="${sc.against ?? ""}" />`
       + `<span>opponent</span>`
-      + `<button class="chip-btn" id="sc-save">Play Scorecard</button>`
       + `</div>`;
   }
 
-  // Multipick needs a second team. Show a dropdown of teams still available to
-  // you (excludes your first pick and any teams used in earlier weeks).
-  const showMultipick = (activeChip === "multipick" || store.multipickEditing) && myPick && open;
-  if (showMultipick) {
-    const teamA = myPick.team;
-    const currentB = myPick.chip === "multipick" ? myPick.team2 : null;
+  // Multipick: second team, bound to the draft.
+  if (displayActive === "multipick" && hasTeam) {
+    const teamA = d.team;
     const used = usedTeams || new Set();
-    const options = TEAMS.filter(t => t !== teamA && (!used.has(t) || t === currentB));
+    const options = TEAMS.filter(t => t !== teamA && (!used.has(t) || t === d.team2));
     html += `<div class="scorecard-form">`
       + `<span class="chip-label" style="margin:0;">Second team — you score if ${teamA} or this team wins</span>`;
     if (options.length === 0) {
       html += `<span class="chip-hint" style="margin:0;">No other teams available to pair with.</span>`;
     } else {
-      html += `<select id="mp-team">`
-        + options.map(t => `<option value="${t}"${t === currentB ? " selected" : ""}>${t}</option>`).join("")
-        + `</select>`
-        + `<button class="chip-btn" id="mp-save">Play Multipick</button>`;
+      html += `<select id="mp-team"><option value="">— choose —</option>`
+        + options.map(t => `<option value="${t}"${t === d.team2 ? " selected" : ""}>${t}</option>`).join("")
+        + `</select>`;
     }
     html += `</div>`;
   }
 
-  if (!myPick) {
-    html += `<span class="chip-hint">Pick a team first, then you can play a chip on it.</span>`;
+  if (!hasTeam) {
+    html += `<span class="chip-hint">Pick a team first, then you can add a chip.</span>`;
   }
 
   row.innerHTML = html;
   row.querySelectorAll(".chip-btn[data-chip]:not([disabled])").forEach(btn => {
-    const id = btn.dataset.chip || null;
-    if (id === "scorecard") {
-      // Reveal the score-entry form rather than saving immediately.
-      btn.onclick = () => { store.scorecardEditing = true; store.multipickEditing = false; renderChipRow(gw, open, usedTeams); };
-    } else if (id === "multipick") {
-      // Reveal the second-team form rather than saving immediately.
-      btn.onclick = () => { store.multipickEditing = true; store.scorecardEditing = false; renderChipRow(gw, open, usedTeams); };
-    } else {
-      btn.onclick = () => { store.scorecardEditing = false; store.multipickEditing = false; setChip(gw, id); };
-    }
+    btn.onclick = () => {
+      d.chip = btn.dataset.chip || null;
+      if (d.chip !== "scorecard") d.scorecard = null;
+      if (d.chip !== "multipick") d.team2 = null;
+      renderWeek();
+    };
   });
+  // Form inputs update the draft in place, without a re-render (keeps focus).
+  const scFor = document.getElementById("sc-for"), scAgainst = document.getElementById("sc-against");
+  const syncSc = () => {
+    const f = parseInt(scFor.value, 10), a = parseInt(scAgainst.value, 10);
+    d.scorecard = { for: Number.isInteger(f) ? f : null, against: Number.isInteger(a) ? a : null };
+  };
+  if (scFor) scFor.oninput = syncSc;
+  if (scAgainst) scAgainst.oninput = syncSc;
+  const mpSel = document.getElementById("mp-team");
+  if (mpSel) mpSel.onchange = () => { d.team2 = mpSel.value || null; };
+}
 
-  const saveBtn = document.getElementById("sc-save");
-  if (saveBtn) {
-    saveBtn.onclick = () => {
-      const f = parseInt(document.getElementById("sc-for").value, 10);
-      const a = parseInt(document.getElementById("sc-against").value, 10);
-      const msg = document.getElementById("pick-msg");
-      if (!Number.isInteger(f) || !Number.isInteger(a) || f < 0 || a < 0) {
-        msg.textContent = "Enter both scores (0 or more) to play Scorecard.";
-        msg.className = "msg error";
-        return;
-      }
-      setChip(gw, "scorecard", { for: f, against: a });
-    };
-  }
-
-  const mpSave = document.getElementById("mp-save");
-  if (mpSave) {
-    mpSave.onclick = () => {
-      const t2 = document.getElementById("mp-team").value;
-      const msg = document.getElementById("pick-msg");
-      if (!t2) {
-        msg.textContent = "Choose a second team to play Multipick.";
-        msg.className = "msg error";
-        return;
-      }
-      setChip(gw, "multipick", null, t2);
-    };
-  }
+// Save / Discard for the draft. Save is always available while the week is
+// open; Discard reverts to the saved pick and is only enabled when dirty.
+function renderPickActions(gw, dirty) {
+  const el = document.getElementById("pick-actions");
+  if (!el) return;
+  el.innerHTML = `<button id="pick-save">Save pick</button>`
+    + `<button class="ghost" id="pick-discard"${dirty ? "" : " disabled"}>Discard changes</button>`;
+  document.getElementById("pick-save").onclick = () => savePick(gw);
+  const dc = document.getElementById("pick-discard");
+  if (dc && dirty) dc.onclick = () => { store.draft = draftFromPick(gw); renderWeek(); };
 }
 
 // The results table for the selected week. Locked weeks reveal everyone's
@@ -464,70 +475,54 @@ async function persist(writePromise, msg, okText) {
   }
 }
 
-// Write (or change) my pick for a given gameweek. Works for the current week
-// and any future week that's still before its own deadline -- the security
-// rules enforce the deadline per gameweek. Keeps any chip already played.
-function submitPick(gw, team) {
-  const existing = myPickFor(gw);
-  const data = {
-    uid: store.currentUser.uid,
-    name: store.currentUser.displayName,
-    email: store.currentUser.email,
-    team,
-    gameweek: gw,
-  };
-  // Changing your team keeps any chip (and its Scorecard prediction /
-  // Multipick second team) you'd already played this week.
-  if (existing?.chip) data.chip = existing.chip;
-  if (existing?.chip === "scorecard" && existing.scorecard) data.scorecard = existing.scorecard;
-  if (existing?.chip === "multipick" && existing.team2 && existing.team2 !== team) {
-    data.team2 = existing.team2;
+// Save the staged draft for a gameweek. Writes (or, if the team was cleared,
+// deletes) the pick, only before that week's deadline -- the rules enforce it.
+// Updates local state + re-renders instantly, persisting in the background.
+function savePick(gw) {
+  const d = store.draft;
+  const msg = document.getElementById("pick-msg");
+  const saved = myPickFor(gw);
+  const pickRef = doc(db, "picks", `${store.currentUser.uid}_gw${gw}`);
+
+  // Cleared team -> remove the pick (nothing to do if there wasn't one).
+  if (!d.team) {
+    if (!saved) { msg.textContent = "Pick a team first."; msg.className = "msg error"; return; }
+    applyMyPickLocally(gw, null);
+    store.draft = draftFromPick(gw);
+    renderWeek();
+    persist(deleteDoc(pickRef), document.getElementById("pick-msg"), "Pick removed.");
+    return;
   }
-  applyMyPickLocally(gw, data);
-  store.scorecardEditing = false;
-  store.multipickEditing = false;
-  renderWeek();
-  persist(setDoc(doc(db, "picks", `${store.currentUser.uid}_gw${gw}`), data),
-          document.getElementById("pick-msg"), `Pick submitted: ${team}`);
-}
+  // Chip forms must be complete before they can be saved.
+  if (d.chip === "scorecard" && !(d.scorecard
+      && Number.isInteger(d.scorecard.for) && Number.isInteger(d.scorecard.against)
+      && d.scorecard.for >= 0 && d.scorecard.against >= 0)) {
+    msg.textContent = "Enter both scores (0 or more) for Scorecard, or choose another chip.";
+    msg.className = "msg error";
+    return;
+  }
+  if (d.chip === "multipick" && !d.team2) {
+    msg.textContent = "Choose a second team for Multipick, or choose another chip.";
+    msg.className = "msg error";
+    return;
+  }
 
-// Remove ("unselect") my pick for a gameweek. Only reachable before that
-// week's deadline; the rules enforce the same. Frees the team + any chip.
-function clearPick(gw) {
-  applyMyPickLocally(gw, null);
-  store.scorecardEditing = false;
-  store.multipickEditing = false;
-  renderWeek();
-  persist(deleteDoc(doc(db, "picks", `${store.currentUser.uid}_gw${gw}`)),
-          document.getElementById("pick-msg"), "Pick removed.");
-}
-
-function setChip(gw, chip, scorecard, team2) {
-  const existing = myPickFor(gw);
-  if (!existing) return;
   const data = {
     uid: store.currentUser.uid,
     name: store.currentUser.displayName,
     email: store.currentUser.email,
-    team: existing.team,
+    team: d.team,
     gameweek: gw,
   };
-  if (chip) data.chip = chip;   // omitting the field clears the chip
-  if (chip === "scorecard" && scorecard) data.scorecard = scorecard;
-  if (chip === "multipick" && team2) data.team2 = team2;
+  if (d.chip) data.chip = d.chip;
+  if (d.chip === "scorecard") data.scorecard = { for: d.scorecard.for, against: d.scorecard.against };
+  if (d.chip === "multipick") data.team2 = d.team2;
+
   applyMyPickLocally(gw, data);
-  store.scorecardEditing = false;
-  store.multipickEditing = false;
+  store.draft = draftFromPick(gw);   // draft now matches the saved pick (not dirty)
   renderWeek();
-  const okText = chip
-    ? (chip === "scorecard"
-        ? `Scorecard set: ${scorecard.for}–${scorecard.against}`
-        : chip === "multipick"
-          ? `Multipick set: ${existing.team} + ${team2}`
-          : `Chip set: ${CHIPS[chip].label}`)
-    : "Chip cleared.";
-  persist(setDoc(doc(db, "picks", `${store.currentUser.uid}_gw${gw}`), data),
-          document.getElementById("pick-msg"), okText);
+  const label = d.chip && CHIPS[d.chip] ? ` (${CHIPS[d.chip].label})` : "";
+  persist(setDoc(pickRef, data), document.getElementById("pick-msg"), `Saved: ${data.team}${label}`);
 }
 
 // Weekly league totals per player (email -> {name, points, played, won, ...}),

@@ -11,8 +11,11 @@ export const store = {
   currentConfig: null,   // { gameweek, deadline }
   myPicks: [],           // all of my picks, any gameweek (for chip usage)
   countdownTimer: null,
-  scorecardEditing: false, // is the Scorecard score-entry form open?
-  multipickEditing: false, // is the Multipick second-team form open?
+  // Staged ("draft") pick for the week shown in the Gameweeks tab:
+  // { gw, team, chip, scorecard, team2 }. Edits live here and only hit
+  // Firestore on Save; switching week re-inits it (silently discarding), and
+  // nothing is reserved on other weeks until a draft is actually saved.
+  draft: null,
   myPlayedGws: new Set(),  // gameweeks where my pick actually played (real result)
   names: {},               // uid -> chosen display name (from profiles/{uid})
   selectTab: null,         // set by initTabs(); selectTab(id) switches tab
