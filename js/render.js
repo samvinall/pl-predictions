@@ -416,14 +416,21 @@ function renderFixtures(gw) {
     return;
   }
   el.innerHTML = list.map(f => {
+    const ko = f.kickoff ? f.kickoff.toDate() : null;
+    // Only reveal a score once the match has actually kicked off (per the
+    // current — possibly simulated — clock). Otherwise it's an upcoming
+    // fixture: show the kickoff time. This keeps the box honest under the Time
+    // Machine and in the mid-season test seed, where future weeks still carry
+    // last season's scores in the data but haven't "happened" yet.
+    const kicked = ko ? nowDate() >= ko : (f.started || f.finished);
+    const hasScore = f.home_score != null && f.away_score != null;
     let meta;
-    if ((f.started || f.finished) && f.home_score != null && f.away_score != null) {
+    if (kicked && hasScore) {
       const cls = f.finished ? "fx-score" : "fx-score fx-live";
       meta = `<span class="${cls}">${f.home_score}–${f.away_score}</span>`;
-    } else if (f.kickoff) {
-      const d = f.kickoff.toDate();
-      const day = d.toLocaleDateString([], { weekday: "short" });
-      const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } else if (ko) {
+      const day = ko.toLocaleDateString([], { weekday: "short" });
+      const time = ko.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       meta = `${day} ${time}`;
     } else {
       meta = "TBC";
