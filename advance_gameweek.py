@@ -24,7 +24,7 @@ SETUP.md for the one-off setup.
 import sys
 from datetime import datetime, timezone
 # reuses the same checks + team-name matching table
-from pull_results import get_db, is_current_season_data, match_team_name, EXIT_STALE_SEASON
+from pull_results import get_db, is_current_season_data, match_team_name, build_results, EXIT_STALE_SEASON
 # `requests` is imported lazily inside the functions that use it, so this
 # module stays importable with only the standard library (see the note in
 # pull_results.py).
@@ -306,13 +306,73 @@ def seed_test_data(shift_years=1):
     db.collection("config").document("current").set({
         "gameweek": cur_gw, "deadline": cur_deadline, "test": True,
     })
+
+    # Real match RESULTS from last season's finished fixtures (unshifted --
+    # results key on gameweek + team, not dates). Without these every locked
+    # week would show "Pending" even though the fixtures have scores. Tagged
+    # source "test" so a real-season pull_results run overwrites them freely.
+    results, _, _ = build_results(team_id_to_name, all_fixtures)
+    batch = db.batch()
+    for i, r in enumerate(results, 1):
+        ref = db.collection("results").document(f"gw{r['gameweek']}_{r['team'].replace(' ', '_')}")
+        batch.set(ref, {**r, "source": "test"})
+        if i % 400 == 0:
+            batch.commit(); batch = db.batch()
+    batch.commit()
+
+    # Season-prediction data: the player list (Golden Boot picker) + final
+    # standings/top scorers (Season tab), a predictions lock at the shifted GW1
+    # deadline, and the actual answers so resolution + scoring can be tested.
+    canon_by_id = {t["id"]: (match_team_name(t["name"], set()) or t["name"]) for t in data["teams"]}
+    db.collection("config").document("players").set({
+        "players": build_players(data["elements"], canon_by_id),
+        "updated": datetime.now(timezone.utc), "test": True,
+    })
+    table = compute_standings(all_fixtures, canon_by_id)
+    db.collection("config").document("standings").set({
+        "table": table, "topScorers": compute_top_scorers(data["elements"], canon_by_id),
+        "updated": datetime.now(timezone.utc), "test": True,
+    })
+    db.collection("config").document("season").set({
+        "predictionsDeadline": schedule["deadlines"][str(cur_gw)], "test": True,
+    })
+    scorers = sorted((e for e in data["elements"] if e.get("goals_scored", 0)),
+                     key=lambda e: (-e.get("goals_scored", 0), -e.get("assists", 0)))
+    season_results = {"test": True}
+    if scorers:
+        season_results["goldenBootId"] = scorers[0]["id"]
+        season_results["goldenBootName"] = scorers[0].get("web_name")
+    if table:
+        season_results["champion"] = table[0]["team"]
+    db.collection("config").document("season_results").set(season_results)
+
     print(f"✅ TEST seed (+{shift_years}y): config/current → GW{cur_gw} "
-          f"(deadline {cur_deadline.isoformat()}), {len(schedule['deadlines'])} "
-          f"weeks in config/schedule. Delete both docs to clean up.")
+          f"(deadline {cur_deadline.isoformat()}), {len(schedule['deadlines'])} weeks in "
+          f"config/schedule, {len(results)} result records, players + standings + season "
+          f"predictions. Run with --clean to remove it all.")
+
+
+def clean_test_data():
+    """Remove everything seed_test_data wrote: the config/* test docs and the
+    result records tagged source 'test'. Leaves picks / season_picks alone."""
+    db = get_db()
+    for name in ("schedule", "current", "players", "standings", "season", "season_results"):
+        db.collection("config").document(name).delete()
+    batch = db.batch()
+    n = 0
+    for d in db.collection("results").where("source", "==", "test").stream():
+        batch.delete(d.reference); n += 1
+        if n % 400 == 0:
+            batch.commit(); batch = db.batch()
+    batch.commit()
+    print(f"🧹 Removed test config docs + {n} test result records. "
+          f"(Any picks you made are left in place — delete them by hand if you want a clean slate.)")
 
 
 if __name__ == "__main__":
-    if "--test" in sys.argv:
+    if "--clean" in sys.argv:
+        clean_test_data()
+    elif "--test" in sys.argv:
         years = 1
         if "--shift-years" in sys.argv:
             years = int(sys.argv[sys.argv.index("--shift-years") + 1])

@@ -103,7 +103,12 @@ service cloud.firestore {
         && string(request.resource.data.gameweek) in get(/databases/$(database)/documents/config/schedule).data.deadlines
         && request.time < get(/databases/$(database)/documents/config/schedule).data.deadlines[string(request.resource.data.gameweek)];
 
-      allow delete: if false;
+      // You can remove ("unselect") your own pick, but only before that
+      // gameweek's deadline -- once a week locks, picks are final.
+      allow delete: if isAllowed()
+        && resource.data.uid == request.auth.uid
+        && string(resource.data.gameweek) in get(/databases/$(database)/documents/config/schedule).data.deadlines
+        && request.time < get(/databases/$(database)/documents/config/schedule).data.deadlines[string(resource.data.gameweek)];
     }
 
     // profiles/{uid} holds { uid, email, name } -- a player's chosen display

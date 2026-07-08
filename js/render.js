@@ -9,7 +9,7 @@ import {
   TEAMS, CHIPS, BONUS_MULTIPLIER, SCORECARD_BONUS,
   GOLDEN_BOOT_BONUS, CHAMPION_BONUS, UNIQUE_THRESHOLD, halfOf,
 } from "./config.js";
-import { db, doc, setDoc } from "./firebase.js";
+import { db, doc, setDoc, deleteDoc } from "./firebase.js";
 import { store, nowDate } from "./store.js";
 import { scorePick, scoreMultipick, multipickOutcomes, fmtCountdown, trailingStreak } from "./scoring.js";
 
@@ -193,9 +193,13 @@ function renderPickPanel(gw, open, usedTeams) {
     const locked = usedTeams.has(team);
     const chip = document.createElement("button");
     chip.className = "team-chip" + (locked ? " locked" : "") + (isMine(team) ? " selected" : "");
-    chip.innerHTML = `<span>${team}</span>` + (locked ? `<span class="lock-note">used</span>` : "");
+    // Clicking your current primary pick again clears it (unselect); a
+    // used team is disabled; anything else selects it.
+    const isPrimary = mp && mp.team === team;
+    chip.innerHTML = `<span>${team}</span>`
+      + (locked ? `<span class="lock-note">used</span>` : isPrimary ? `<span class="lock-note">tap to clear</span>` : "");
     chip.disabled = locked;
-    chip.onclick = () => submitPick(gw, team);
+    chip.onclick = isPrimary ? () => clearPick(gw) : () => submitPick(gw, team);
     grid.appendChild(chip);
   });
 
@@ -215,15 +219,15 @@ function renderChipRow(gw, open, usedTeams) {
     : null;
   const displayActive = editingChip || activeChip;
 
-  // Which chips have I already spent in this half (on a different week that
-  // actually played)? A chip on a forfeited/abandoned week doesn't count and
-  // stays re-playable, so only weeks in myPlayedGws consume the allowance.
+  // Which chips have I already spent in this half? A chip is reserved as soon
+  // as it's played on another week (including a future pre-pick), just like a
+  // team -- so you can't put the same chip on two weeks. Only a forfeited /
+  // abandoned week frees its chip up again to be re-played.
   const spentThisHalf = {};
   store.myPicks.forEach(p => {
-    if (p.gameweek !== gw && halfOf(p.gameweek) === half
-        && p.chip && store.myPlayedGws.has(p.gameweek)) {
-      spentThisHalf[p.chip] = p.gameweek;
-    }
+    if (p.gameweek === gw || halfOf(p.gameweek) !== half || !p.chip) return;
+    const forfeited = (store.results[`${p.gameweek}_${p.team}`] || []).includes("forfeit");
+    if (!forfeited) spentThisHalf[p.chip] = p.gameweek;
   });
 
   let html = `<span class="chip-label">Chip — one per week, each usable once per half (H${half})</span>`;
@@ -458,6 +462,23 @@ async function submitPick(gw, team) {
     await store.reload();
   } catch (e) {
     msg.textContent = `Couldn't submit: ${e.message}`;
+    msg.className = "msg error";
+  }
+}
+
+// Remove ("unselect") my pick for a gameweek. Only reachable before that
+// week's deadline; the rules enforce the same. Frees the team + any chip.
+async function clearPick(gw) {
+  const msg = document.getElementById("pick-msg");
+  msg.textContent = "Removing pick…";
+  msg.className = "msg";
+  try {
+    await deleteDoc(doc(db, "picks", `${store.currentUser.uid}_gw${gw}`));
+    msg.textContent = "Pick removed.";
+    msg.className = "msg ok";
+    await store.reload();
+  } catch (e) {
+    msg.textContent = `Couldn't remove pick: ${e.message}`;
     msg.className = "msg error";
   }
 }

@@ -197,21 +197,25 @@ async function loadEverything() {
   const seasonCfg = (await getDoc(doc(db, "config", "season"))).data() || null;
   const seasonDeadlineTs = seasonCfg && seasonCfg.predictionsDeadline;
   const seasonDeadline = seasonDeadlineTs && seasonDeadlineTs.toDate ? seasonDeadlineTs.toDate() : null;
-  const seasonOpen = !seasonDeadline || new Date() < seasonDeadline;
+  // Two notions of "open": the REAL one gates what we're allowed to read (must
+  // match the rules, which use the server clock); the SIMULATED one (Time
+  // Machine) only drives how the Season tab renders.
+  const seasonOpenReal = !seasonDeadline || new Date() < seasonDeadline;
+  const seasonOpenSim = !seasonDeadline || nowDate() < seasonDeadline;
   const seasonResults = (await getDoc(doc(db, "config", "season_results"))).data() || null;
   const standings = (await getDoc(doc(db, "config", "standings"))).data() || null;
 
   // Player list powers the Golden Boot picker (while open) and the admin's
   // result picker (any time), so load it if predictions are open or you're admin.
   let players = null;
-  if (seasonOpen || store.currentUser.email === ADMIN_EMAIL) {
+  if (seasonOpenReal || store.currentUser.email === ADMIN_EMAIL) {
     const playersData = (await getDoc(doc(db, "config", "players"))).data();
     players = playersData ? (playersData.players || []) : null;
   }
 
-  // Own season pick always readable; everyone's once the deadline passes.
+  // Own season pick always readable; everyone's once the deadline really passes.
   let seasonPicks = [];
-  if (seasonOpen) {
+  if (seasonOpenReal) {
     const mine = (await getDoc(doc(db, "season_picks", store.currentUser.uid))).data();
     if (mine) seasonPicks = [mine];
   } else {
@@ -258,7 +262,7 @@ async function loadEverything() {
 
   renderProfile();
   renderWeek();
-  renderSeason({ open: seasonOpen, deadline: seasonDeadline, results: seasonResults, standings, players, seasonPicks, myPick: mySeasonPick });
+  renderSeason({ open: seasonOpenSim, deadline: seasonDeadline, results: seasonResults, standings, players, seasonPicks, myPick: mySeasonPick });
   renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity, seasonPicks, seasonResults);
 }
 

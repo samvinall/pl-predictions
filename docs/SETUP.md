@@ -384,15 +384,27 @@ fixtures before the new season's data exists, seed test data:
 ```bash
 python3 advance_gameweek.py --test          # last season, all dates +1 year
 python3 advance_gameweek.py --test --shift-years 1
+python3 advance_gameweek.py --clean         # remove everything the seed wrote
 ```
 
-This writes `config/schedule` + `config/current` (tagged `{ test: true }`) from
-last season's fixtures, shifted forward so the calendar plays as the upcoming
-season — every deadline lands in the real future, so pick-writes are genuinely
-accepted. **This is live data every signed-in player would see**, so only do it
-in the off-season, and clean up afterwards by deleting `config/schedule` and
-`config/current` in the Firestore console (the real-season sync also overwrites
-them once actual data appears).
+The seed writes (all tagged `{ test: true }`) from last season's data, dates
+shifted forward so the calendar plays as the upcoming season — every deadline
+lands in the real future, so pick-writes are genuinely accepted:
+
+- `config/schedule` + `config/current` — the week calendar (drives the
+  Gameweeks tab + pre-picking).
+- the `results` collection — real match results, so locked weeks show actual
+  scorelines instead of "Pending".
+- `config/players` + `config/standings` + `config/season` +
+  `config/season_results` — so the **Season** tab is fully populated (Golden
+  Boot picker, standings/top scorers, a predictions lock at the GW1 deadline,
+  and the real answers for testing resolution).
+
+**This is live data every signed-in player would see**, so only do it in the
+off-season. `--clean` removes it all (config test docs + the `source: "test"`
+results); it leaves any picks you made — delete those by hand for a clean
+slate. The real-season sync also overwrites the seeded docs once actual data
+appears.
 
 To see how a week *renders* as current / locked / past without waiting, use the
 admin **Time Machine** (Admin tab): set a simulated "now" and the Gameweeks tab
