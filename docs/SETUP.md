@@ -375,6 +375,31 @@ live scores as games finish. The firestore rules also index into
 current week only) is kept for backwards-compatibility. `config/*` is readable
 by any signed-in user, so no extra security rule is needed.
 
+### Testing future-week selection out of season
+
+Out of season the FPL API serves last season's data, and the normal sync
+refuses to write it. To exercise the Gameweeks tab / pre-picking against real
+fixtures before the new season's data exists, seed test data:
+
+```bash
+python3 advance_gameweek.py --test          # last season, all dates +1 year
+python3 advance_gameweek.py --test --shift-years 1
+```
+
+This writes `config/schedule` + `config/current` (tagged `{ test: true }`) from
+last season's fixtures, shifted forward so the calendar plays as the upcoming
+season — every deadline lands in the real future, so pick-writes are genuinely
+accepted. **This is live data every signed-in player would see**, so only do it
+in the off-season, and clean up afterwards by deleting `config/schedule` and
+`config/current` in the Firestore console (the real-season sync also overwrites
+them once actual data appears).
+
+To see how a week *renders* as current / locked / past without waiting, use the
+admin **Time Machine** (Admin tab): set a simulated "now" and the Gameweeks tab
+re-renders against it. It's browser-local and never touches data — and it can't
+move the server clock the pick-save rules enforce, so a pick you try to save is
+still judged against the real deadline.
+
 ## Custom display names
 
 Each player can set a display name on the **Settings** tab (overrides their

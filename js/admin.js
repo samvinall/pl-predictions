@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 import { TEAMS } from "./config.js";
 import { db, doc, getDoc, setDoc } from "./firebase.js";
-import { store } from "./store.js";
+import { store, nowDate } from "./store.js";
 
 export function setupAdminPanel() {
   const teamSelect = document.getElementById("admin-team");
@@ -180,6 +180,39 @@ export function renderAdminNames(players) {
 function toLocalInput(d) {
   const pad = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Admin-only "Time Machine": simulate a different "now" in this browser to see
+// how the Gameweeks tab renders across past/current/future weeks. Stores an
+// offset (ms) on the store + localStorage; a reload re-renders everything
+// through nowDate(). This is view-only -- it never writes data and can't move
+// the server clock the pick-save rules enforce against.
+export function setupTimeMachine() {
+  const input = document.getElementById("clock-input");
+  const msg = document.getElementById("clock-msg");
+  if (!input) return;
+  input.value = toLocalInput(nowDate());
+
+  const setBtn = document.getElementById("clock-set");
+  if (setBtn) setBtn.onclick = async () => {
+    if (!input.value) { msg.textContent = "Pick a date & time to simulate."; msg.className = "msg error"; return; }
+    const target = new Date(input.value).getTime();
+    store.clockOffsetMs = target - Date.now();
+    try { localStorage.setItem("simClockOffsetMs", String(store.clockOffsetMs)); } catch (e) { /* ignore */ }
+    msg.textContent = `Simulating ${new Date(target).toLocaleString()} — this browser only.`;
+    msg.className = "msg ok";
+    await store.reload();
+  };
+
+  const resetBtn = document.getElementById("clock-reset");
+  if (resetBtn) resetBtn.onclick = async () => {
+    store.clockOffsetMs = 0;
+    try { localStorage.removeItem("simClockOffsetMs"); } catch (e) { /* ignore */ }
+    msg.textContent = "Back to live time.";
+    msg.className = "msg ok";
+    input.value = toLocalInput(nowDate());
+    await store.reload();
+  };
 }
 
 export function setupSeasonAdmin(players, season, results) {

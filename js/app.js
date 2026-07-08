@@ -9,11 +9,11 @@ import {
   doc, getDoc, collection, query, where, getDocs,
 } from "./firebase.js";
 import { ADMIN_EMAIL } from "./config.js";
-import { store } from "./store.js";
+import { store, nowDate } from "./store.js";
 import { multipickOutcomes } from "./scoring.js";
-import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist } from "./admin.js";
+import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist, setupTimeMachine } from "./admin.js";
 import {
-  startDeadlineCountdown, renderWeek,
+  startDeadlineCountdown, renderWeek, currentGameweek,
   renderLeaderboard, renderProfile, renderRules,
 } from "./render.js";
 import { renderSeason } from "./season.js";
@@ -79,6 +79,7 @@ onAuthStateChanged(auth, async (user) => {
       document.getElementById("tab-btn-admin").style.display = "";
       setupAdminPanel();
       setupAccessPanel();
+      setupTimeMachine();
     }
 
     await loadEverything();
@@ -240,11 +241,19 @@ async function loadEverything() {
   store.concededByKey = concededByKey;
   store.popularity = popularity;
 
-  // Default the Gameweeks tab to the live week; keep the player's chosen week
-  // across a reload if it's still on the calendar.
+  // Default the Gameweeks tab to the (possibly simulated) current week; keep
+  // the player's chosen week across a reload if it's still on the calendar.
   const validGws = store.schedule.map(s => s.gameweek);
   if (store.selectedGameweek == null || !validGws.includes(store.selectedGameweek)) {
-    store.selectedGameweek = store.currentConfig.gameweek;
+    const cur = currentGameweek();
+    store.selectedGameweek = (cur != null && validGws.includes(cur)) ? cur : store.currentConfig.gameweek;
+  }
+
+  // Time Machine indicator: a persistent reminder while a simulated clock is on.
+  const simEl = document.getElementById("sim-indicator");
+  if (simEl) {
+    if (store.clockOffsetMs) { simEl.style.display = ""; simEl.textContent = `🕓 SIM ${nowDate().toLocaleString()}`; }
+    else simEl.style.display = "none";
   }
 
   renderProfile();

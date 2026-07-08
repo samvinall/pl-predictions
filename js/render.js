@@ -10,7 +10,7 @@ import {
   GOLDEN_BOOT_BONUS, CHAMPION_BONUS, UNIQUE_THRESHOLD, halfOf,
 } from "./config.js";
 import { db, doc, setDoc } from "./firebase.js";
-import { store } from "./store.js";
+import { store, nowDate } from "./store.js";
 import { scorePick, scoreMultipick, multipickOutcomes, fmtCountdown, trailingStreak } from "./scoring.js";
 
 // Live-ticking countdown to the current gameweek's deadline in the status row.
@@ -60,12 +60,24 @@ function fmtResult(outcomes, goals, conceded) {
 // Combined "Gameweeks" tab
 // ---------------------------------------------------------------------------
 
-const isCurrentGw = gw => gw === store.currentConfig.gameweek;
 const scheduleEntry = gw => store.schedule.find(s => s.gameweek === gw) || null;
 const deadlineOf = gw => store.deadlinesByGw[gw] || null;
-const isWeekOpen = gw => { const d = deadlineOf(gw); return !!d && new Date() < d; };
+const isWeekOpen = gw => { const d = deadlineOf(gw); return !!d && nowDate() < d; };
 const fixturesOf = gw => { const e = scheduleEntry(gw); return e ? e.fixtures : []; };
 const myPickFor = gw => store.myPicks.find(p => p.gameweek === gw) || null;
+
+// The "current" gameweek from the app's point of view: the earliest scheduled
+// week whose deadline hasn't passed (per the — possibly simulated — clock).
+// Falls back to the last scheduled week, then to config/current. This is what
+// makes the Time Machine move which week reads as "current"/"live".
+export function currentGameweek() {
+  const now = nowDate();
+  const upcoming = store.schedule.filter(s => s.deadline && s.deadline > now);
+  if (upcoming.length) return upcoming[0].gameweek;   // schedule is sorted ascending
+  if (store.schedule.length) return store.schedule[store.schedule.length - 1].gameweek;
+  return store.currentConfig ? store.currentConfig.gameweek : null;
+}
+const isCurrentGw = gw => gw === currentGameweek();
 
 function fmtDeadline(d) {
   return d.toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });

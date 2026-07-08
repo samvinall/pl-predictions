@@ -133,5 +133,20 @@ class TestBuildSchedule(unittest.TestCase):
         self.assertNotIn("3", sched["deadlines"])
 
 
+class TestShiftYear(unittest.TestCase):
+    def test_shifts_and_keeps_tz(self):
+        from datetime import datetime, timezone
+        d = datetime(2025, 8, 21, 19, 0, tzinfo=timezone.utc)
+        out = ag.shift_year(d, 1)
+        self.assertEqual((out.year, out.month, out.day, out.hour), (2026, 8, 21, 19))
+        self.assertEqual(out.tzinfo, timezone.utc)
+
+    def test_leap_day_falls_back_to_28th(self):
+        from datetime import datetime, timezone
+        d = datetime(2024, 2, 29, 12, 0, tzinfo=timezone.utc)   # 2024 leap
+        out = ag.shift_year(d, 1)                               # 2025 not leap
+        self.assertEqual((out.year, out.month, out.day), (2025, 2, 28))
+
+
 if __name__ == "__main__":
     unittest.main()

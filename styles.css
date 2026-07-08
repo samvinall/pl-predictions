@@ -218,6 +218,8 @@
     border-radius:20px;
     font-weight:700;
   }
+  /* Time Machine active: a loud non-gold chip so you never forget the clock is simulated. */
+  .sim-badge{ background:#8a1f1f; color:#fff; margin-left:0.4rem; }
   table{ width:100%; border-collapse:collapse; font-family:'JetBrains Mono', monospace; font-size:0.82rem; }
   th, td{ text-align:left; padding:0.45rem 0.4rem; border-bottom:1px solid var(--paper-2); }
   th{ text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em; color:var(--muted); }
