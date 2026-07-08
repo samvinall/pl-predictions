@@ -22,7 +22,7 @@ SETUP.md for the one-off setup.
 """
 
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 # reuses the same checks + team-name matching table
 from pull_results import get_db, is_current_season_data, match_team_name, build_results, EXIT_STALE_SEASON
 # `requests` is imported lazily inside the functions that use it, so this
@@ -262,40 +262,64 @@ def shift_year(dt, years):
         return dt.replace(year=dt.year + years, day=28)
 
 
-def seed_test_data(shift_years=1):
+def seed_test_data(shift_years=1, cutoff=None):
     """OFF-SEASON TEST SEED. Builds config/schedule + config/current from
-    whatever the FPL API is currently serving (last season, out of season),
-    with every deadline + kickoff shifted forward by `shift_years` so the
-    calendar plays as if it were the upcoming season. This is how the
-    future-week feature gets exercised in prod before the real season data
-    exists -- the normal `main()` refuses to write stale-season data, this
-    opts in explicitly. Docs are tagged { test: True } so it's obvious they're
-    seeded; delete config/schedule + config/current to clean up.
+    whatever the FPL API is currently serving (last season, out of season), so
+    the future-week feature can be exercised in prod before the real season
+    data exists. The normal main() refuses to write stale-season data; this
+    opts in explicitly. Everything is tagged { test: True }; run with --clean
+    to remove it.
 
-    NB: the security rules lock picks against the SERVER clock (request.time),
-    which no client override can move. Shifting a year forward puts the whole
-    calendar in the real future, so every week's pick-writes are genuinely
-    accepted right now; use the client-side Time Machine to scrub how each week
-    RENDERS (upcoming / live / locked)."""
+    Two anchoring modes:
+
+    * DEFAULT (`shift_years`): shift every date forward by whole years, so the
+      whole calendar sits in the real future. Every week is "upcoming" now;
+      use the client Time Machine to scrub how weeks render. Season predictions
+      are open, and the final answers are seeded so resolution can be tested.
+
+    * CUTOFF (`cutoff=N`): anchor so gameweek N is the current, still-open week
+      RIGHT NOW (its deadline a few days ahead), i.e. simulate being partway
+      through the season. Weeks 1..N-1 are locked with real results; weeks
+      N+1.. are upcoming and pickable. Standings reflect only the played weeks,
+      season predictions are LOCKED (past their deadline) and NOT yet resolved
+      (no Final Table) -- a faithful mid-season snapshot against the real clock,
+      no Time Machine needed.
+
+    NB: the rules lock picks against the SERVER clock, which no client override
+    can move -- both modes place the pickable weeks in the real future so their
+    writes are genuinely accepted."""
     import requests
     data = requests.get(FPL_BOOTSTRAP, timeout=15).json()
     team_id_to_name = {t["id"]: t["name"] for t in data["teams"]}
     events = data["events"]
     all_fixtures = requests.get(FPL_FIXTURES, timeout=15).json()
+    now = datetime.now(timezone.utc)
 
     schedule = build_schedule(events, all_fixtures, team_id_to_name)
-    # Shift every deadline and kickoff forward by `shift_years`.
-    schedule["deadlines"] = {gw: shift_year(dt, shift_years) for gw, dt in schedule["deadlines"].items()}
+
+    if cutoff is not None:
+        # Delta-shift so gameweek `cutoff` opens ~3 days from now: earlier weeks
+        # land in the past (locked), later weeks in the future (upcoming).
+        orig = schedule["deadlines"].get(str(cutoff))
+        if orig is None:
+            raise SystemExit(f"No gameweek {cutoff} in the fixture data (have "
+                             f"{min(int(g) for g in schedule['deadlines'])}.."
+                             f"{max(int(g) for g in schedule['deadlines'])}).")
+        delta = (now + timedelta(days=3)) - orig
+        shift = lambda dt: dt + delta
+    else:
+        shift = lambda dt: shift_year(dt, shift_years)
+
+    schedule["deadlines"] = {gw: shift(dt) for gw, dt in schedule["deadlines"].items()}
     for rows in schedule["fixturesByGw"].values():
         for r in rows:
             if r["kickoff"] is not None:
-                r["kickoff"] = shift_year(r["kickoff"], shift_years)
+                r["kickoff"] = shift(r["kickoff"])
     schedule["updated"] = datetime.now(timezone.utc)
     schedule["test"] = True
 
     # config/current = earliest week whose (shifted) deadline is still ahead;
     # if the whole shifted season is already behind us, use the last week.
-    now = datetime.now(timezone.utc)
     upcoming = {int(gw): dt for gw, dt in schedule["deadlines"].items() if dt > now}
     cur_gw = min(upcoming, key=lambda g: upcoming[g]) if upcoming \
         else max(int(g) for g in schedule["deadlines"])
@@ -308,10 +332,12 @@ def seed_test_data(shift_years=1):
     })
 
     # Real match RESULTS from last season's finished fixtures (unshifted --
-    # results key on gameweek + team, not dates). Without these every locked
-    # week would show "Pending" even though the fixtures have scores. Tagged
-    # source "test" so a real-season pull_results run overwrites them freely.
+    # results key on gameweek + team, not dates). In cutoff mode only weeks
+    # BEFORE the cutoff are "played", so later weeks stay genuinely unplayed.
+    # Tagged source "test" so a real-season pull_results run overwrites freely.
     results, _, _ = build_results(team_id_to_name, all_fixtures)
+    if cutoff is not None:
+        results = [r for r in results if r["gameweek"] < cutoff]
     batch = db.batch()
     for i, r in enumerate(results, 1):
         ref = db.collection("results").document(f"gw{r['gameweek']}_{r['team'].replace(' ', '_')}")
@@ -320,36 +346,48 @@ def seed_test_data(shift_years=1):
             batch.commit(); batch = db.batch()
     batch.commit()
 
-    # Season-prediction data: the player list (Golden Boot picker) + final
-    # standings/top scorers (Season tab), a predictions lock at the shifted GW1
-    # deadline, and the actual answers so resolution + scoring can be tested.
+    # Season-prediction data: player list (Golden Boot picker) + standings/top
+    # scorers (Season tab). In cutoff mode standings reflect only the played
+    # weeks (a mid-season table); otherwise the full last-season table.
     canon_by_id = {t["id"]: (match_team_name(t["name"], set()) or t["name"]) for t in data["teams"]}
     db.collection("config").document("players").set({
         "players": build_players(data["elements"], canon_by_id),
         "updated": datetime.now(timezone.utc), "test": True,
     })
-    table = compute_standings(all_fixtures, canon_by_id)
+    table_fixtures = [fx for fx in all_fixtures if cutoff is None or (fx.get("event") or 0) < cutoff]
+    table = compute_standings(table_fixtures, canon_by_id)
     db.collection("config").document("standings").set({
         "table": table, "topScorers": compute_top_scorers(data["elements"], canon_by_id),
         "updated": datetime.now(timezone.utc), "test": True,
     })
+    # Predictions lock at the shifted GW1 deadline -- future in default mode
+    # (open), past in cutoff mode (locked, as they'd be mid-season).
     db.collection("config").document("season").set({
-        "predictionsDeadline": schedule["deadlines"][str(cur_gw)], "test": True,
+        "predictionsDeadline": schedule["deadlines"]["1"], "test": True,
     })
-    scorers = sorted((e for e in data["elements"] if e.get("goals_scored", 0)),
-                     key=lambda e: (-e.get("goals_scored", 0), -e.get("assists", 0)))
-    season_results = {"test": True}
-    if scorers:
-        season_results["goldenBootId"] = scorers[0]["id"]
-        season_results["goldenBootName"] = scorers[0].get("web_name")
-    if table:
-        season_results["champion"] = table[0]["team"]
-    db.collection("config").document("season_results").set(season_results)
 
-    print(f"✅ TEST seed (+{shift_years}y): config/current → GW{cur_gw} "
+    if cutoff is not None:
+        # Mid-season: the season isn't over, so don't reveal the answers /
+        # Final Table. Clear any results a previous full-season seed left.
+        db.collection("config").document("season_results").delete()
+    else:
+        # Full-season sim: seed the actual answers so resolution + the Final
+        # Table can be tested.
+        scorers = sorted((e for e in data["elements"] if e.get("goals_scored", 0)),
+                         key=lambda e: (-e.get("goals_scored", 0), -e.get("assists", 0)))
+        season_results = {"test": True}
+        if scorers:
+            season_results["goldenBootId"] = scorers[0]["id"]
+            season_results["goldenBootName"] = scorers[0].get("web_name")
+        if table:
+            season_results["champion"] = table[0]["team"]
+        db.collection("config").document("season_results").set(season_results)
+
+    mode = f"cutoff GW{cutoff} (mid-season)" if cutoff is not None else f"+{shift_years}y (all upcoming)"
+    print(f"✅ TEST seed [{mode}]: config/current → GW{cur_gw} "
           f"(deadline {cur_deadline.isoformat()}), {len(schedule['deadlines'])} weeks in "
-          f"config/schedule, {len(results)} result records, players + standings + season "
-          f"predictions. Run with --clean to remove it all.")
+          f"config/schedule, {len(results)} result records, players + standings + season. "
+          f"Run with --clean to remove it all.")
 
 
 def clean_test_data():
@@ -376,6 +414,9 @@ if __name__ == "__main__":
         years = 1
         if "--shift-years" in sys.argv:
             years = int(sys.argv[sys.argv.index("--shift-years") + 1])
-        seed_test_data(years)
+        cutoff = None
+        if "--cutoff" in sys.argv:
+            cutoff = int(sys.argv[sys.argv.index("--cutoff") + 1])
+        seed_test_data(years, cutoff)
     else:
         main()
