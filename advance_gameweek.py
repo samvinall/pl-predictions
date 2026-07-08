@@ -253,5 +253,69 @@ def main():
     print(f"✅ Wrote schedule for {len(schedule['deadlines'])} gameweeks to config/schedule.")
 
 
+def shift_year(dt, years):
+    """Move a datetime forward by whole calendar years, preserving the tz.
+    Feb 29 in a non-leap target year falls back to Feb 28. Pure -- unit-tested."""
+    try:
+        return dt.replace(year=dt.year + years)
+    except ValueError:   # Feb 29 -> non-leap year
+        return dt.replace(year=dt.year + years, day=28)
+
+
+def seed_test_data(shift_years=1):
+    """OFF-SEASON TEST SEED. Builds config/schedule + config/current from
+    whatever the FPL API is currently serving (last season, out of season),
+    with every deadline + kickoff shifted forward by `shift_years` so the
+    calendar plays as if it were the upcoming season. This is how the
+    future-week feature gets exercised in prod before the real season data
+    exists -- the normal `main()` refuses to write stale-season data, this
+    opts in explicitly. Docs are tagged { test: True } so it's obvious they're
+    seeded; delete config/schedule + config/current to clean up.
+
+    NB: the security rules lock picks against the SERVER clock (request.time),
+    which no client override can move. Shifting a year forward puts the whole
+    calendar in the real future, so every week's pick-writes are genuinely
+    accepted right now; use the client-side Time Machine to scrub how each week
+    RENDERS (upcoming / live / locked)."""
+    import requests
+    data = requests.get(FPL_BOOTSTRAP, timeout=15).json()
+    team_id_to_name = {t["id"]: t["name"] for t in data["teams"]}
+    events = data["events"]
+    all_fixtures = requests.get(FPL_FIXTURES, timeout=15).json()
+
+    schedule = build_schedule(events, all_fixtures, team_id_to_name)
+    # Shift every deadline and kickoff forward by `shift_years`.
+    schedule["deadlines"] = {gw: shift_year(dt, shift_years) for gw, dt in schedule["deadlines"].items()}
+    for rows in schedule["fixturesByGw"].values():
+        for r in rows:
+            if r["kickoff"] is not None:
+                r["kickoff"] = shift_year(r["kickoff"], shift_years)
+    schedule["updated"] = datetime.now(timezone.utc)
+    schedule["test"] = True
+
+    # config/current = earliest week whose (shifted) deadline is still ahead;
+    # if the whole shifted season is already behind us, use the last week.
+    now = datetime.now(timezone.utc)
+    upcoming = {int(gw): dt for gw, dt in schedule["deadlines"].items() if dt > now}
+    cur_gw = min(upcoming, key=lambda g: upcoming[g]) if upcoming \
+        else max(int(g) for g in schedule["deadlines"])
+    cur_deadline = schedule["deadlines"][str(cur_gw)]
+
+    db = get_db()
+    db.collection("config").document("schedule").set(schedule)
+    db.collection("config").document("current").set({
+        "gameweek": cur_gw, "deadline": cur_deadline, "test": True,
+    })
+    print(f"✅ TEST seed (+{shift_years}y): config/current → GW{cur_gw} "
+          f"(deadline {cur_deadline.isoformat()}), {len(schedule['deadlines'])} "
+          f"weeks in config/schedule. Delete both docs to clean up.")
+
+
 if __name__ == "__main__":
-    main()
+    if "--test" in sys.argv:
+        years = 1
+        if "--shift-years" in sys.argv:
+            years = int(sys.argv[sys.argv.index("--shift-years") + 1])
+        seed_test_data(years)
+    else:
+        main()

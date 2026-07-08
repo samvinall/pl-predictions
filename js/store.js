@@ -19,6 +19,16 @@ export const store = {
   showingDenied: false,    // are we showing the "not on the guest list" screen?
   reload: async () => {},  // set to loadEverything() during boot
 
+  // Admin "Time Machine": a client-only offset (ms) added to the real clock so
+  // the admin can simulate a different "now" and see how the Gameweeks tab
+  // renders across past/current/future weeks. Purely local -- never touches
+  // data, and can't move the SERVER clock the pick-save rules use. Persisted in
+  // localStorage so it survives reloads. See nowMs()/nowDate() below.
+  clockOffsetMs: (() => {
+    try { return parseInt(localStorage.getItem("simClockOffsetMs") || "0", 10) || 0; }
+    catch (e) { return 0; }
+  })(),
+
   // --- Whole-season calendar + the combined Gameweeks tab ---
   // schedule: sorted [{ gameweek, deadline: Date|null, fixtures: [...] }] mirrored
   // from config/schedule; lets the Gameweeks tab scroll through every week and
@@ -34,3 +44,10 @@ export const store = {
   concededByKey: {},
   popularity: {},
 };
+
+// The app's notion of "now", including the admin Time Machine offset. All
+// gameweek open/locked/current rendering reads through these so simulating a
+// different date is a one-line change everywhere. NB: this is client-only --
+// Firestore security rules still enforce against the real server clock.
+export const nowMs = () => Date.now() + (store.clockOffsetMs || 0);
+export const nowDate = () => new Date(nowMs());

@@ -1,0 +1,40 @@
+name: Seed test data
+
+# Manually seeds config/schedule + config/current from last season's FPL
+# fixtures with every date shifted forward, so the future-week feature can be
+# exercised in prod out of season (before real 2026/27 data exists). Run from
+# the Actions tab. Reuses the same service-account secret as the data sync.
+#
+# ⚠️ This writes LIVE data every signed-in player would see. Only run it in the
+# off-season, and clean up afterwards by deleting config/schedule and
+# config/current in the Firestore console. See docs/SETUP.md.
+on:
+  workflow_dispatch:
+    inputs:
+      shift_years:
+        description: "Years to shift last season's dates forward"
+        required: true
+        default: "1"
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests firebase-admin
+
+      - name: Write Firebase service account key
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
+
+      - name: Seed test schedule
+        run: python advance_gameweek.py --test --shift-years "${{ inputs.shift_years }}"

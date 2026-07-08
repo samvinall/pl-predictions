@@ -41,6 +41,7 @@
       <div>
         <span class="badge" id="gw-badge">GW –</span>
         <span id="deadline-text"></span>
+        <span class="badge sim-badge" id="sim-indicator" style="display:none;"></span>
       </div>
       <button class="ghost" id="signout-btn">Sign out</button>
     </div>
@@ -220,6 +221,20 @@
       <h2>Admin &mdash; Player Names</h2>
       <p class="eyebrow">Override any player's display name (blank = use their own).</p>
       <div id="admin-names-list"></div>
+    </div>
+
+    <div class="card" id="admin-clock-card" style="border-color:var(--gold);">
+      <h2>Admin &mdash; Time Machine</h2>
+      <p class="eyebrow">Simulate a different "now" to test the Gameweeks tab across past / current / future weeks. This only changes what <strong>you</strong> see in this browser — it never touches data, and it can't move the server clock the pick-save rules use (so a pick you try to save is still judged against the real deadline).</p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:end; margin-top:0.8rem;">
+        <div>
+          <label class="eyebrow" for="clock-input">Simulated date &amp; time</label><br/>
+          <input type="datetime-local" id="clock-input" style="padding:0.5rem; font-family:'JetBrains Mono',monospace;" />
+        </div>
+        <button id="clock-set">Simulate</button>
+        <button class="ghost" id="clock-reset">Reset to live</button>
+      </div>
+      <div class="msg" id="clock-msg"></div>
     </div>
 
     <div class="card" id="admin-season-card" style="border-color:var(--gold);">
