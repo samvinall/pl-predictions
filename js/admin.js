@@ -151,11 +151,16 @@ export function renderAdminNames(players) {
     el.innerHTML = `<p class="empty">No players yet — names can be set once people have signed in or picked.</p>`;
     return;
   }
+  const esc = s => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  const label = p => (p.override || p.original || p.email || "").toLowerCase();
   el.innerHTML = players
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-    .map(p => `<div class="pick-tile" style="display:flex; align-items:center; gap:0.5rem; justify-content:space-between;">
-      <span class="mono" style="font-size:0.72rem; flex:1; min-width:8rem; overflow:hidden; text-overflow:ellipsis;">${p.email || p.uid}</span>
-      <input type="text" maxlength="24" value="${(p.name || "").replace(/"/g, "&quot;")}" data-uid="${p.uid}" data-email="${p.email || ""}" style="padding:0.35rem; font-family:'JetBrains Mono',monospace; width:9rem;" />
+    .sort((a, b) => label(a).localeCompare(label(b)))
+    .map(p => `<div class="pick-tile" style="display:flex; align-items:center; gap:0.6rem; justify-content:space-between; flex-wrap:wrap;">
+      <div style="flex:1; min-width:12rem; overflow:hidden;">
+        <div class="mono" style="font-size:0.72rem; overflow:hidden; text-overflow:ellipsis;">${esc(p.email || p.uid)}</div>
+        <div class="eyebrow" style="font-size:0.6rem; margin-top:0.15rem;">original: ${esc(p.original) || "—"}</div>
+      </div>
+      <input type="text" maxlength="24" value="${esc(p.override)}" placeholder="${esc(p.original) || "display name"}" data-uid="${p.uid}" data-email="${esc(p.email)}" style="padding:0.35rem; font-family:'JetBrains Mono',monospace; width:9rem;" />
       <button class="ghost" data-save="${p.uid}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Save</button>
     </div>`).join("");
 

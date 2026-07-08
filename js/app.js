@@ -162,9 +162,11 @@ async function loadEverything() {
     renderAdminRecent(resultsDocs);
     // Players the admin can rename: everyone who's picked, plus anyone with a
     // profile already set.
+    // original = the Google account name captured on their picks; override =
+    // the chosen name from profiles/{uid} (store.names), if any.
     const byUid = new Map();
-    allPicks.forEach(p => { if (!byUid.has(p.uid)) byUid.set(p.uid, { uid: p.uid, email: p.email, name: store.names[p.uid] || p.name }); });
-    Object.keys(store.names).forEach(uid => { if (!byUid.has(uid)) byUid.set(uid, { uid, email: "", name: store.names[uid] }); });
+    allPicks.forEach(p => { if (!byUid.has(p.uid)) byUid.set(p.uid, { uid: p.uid, email: p.email, original: p.name || "", override: store.names[p.uid] || "" }); });
+    Object.keys(store.names).forEach(uid => { if (!byUid.has(uid)) byUid.set(uid, { uid, email: "", original: "", override: store.names[uid] }); });
     renderAdminNames([...byUid.values()]);
   }
 
