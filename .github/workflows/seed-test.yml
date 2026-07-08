@@ -12,9 +12,13 @@ on:
   workflow_dispatch:
     inputs:
       shift_years:
-        description: "Years to shift last season's dates forward"
+        description: "Years to shift last season's dates forward (ignored if cutoff is set)"
         required: true
         default: "1"
+      cutoff:
+        description: "Mid-season snapshot: gameweek to make 'current' now (e.g. 20). Blank = all weeks upcoming."
+        required: false
+        default: ""
 
 jobs:
   seed:
@@ -37,4 +41,9 @@ jobs:
         run: echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
 
       - name: Seed test schedule
-        run: python advance_gameweek.py --test --shift-years "${{ inputs.shift_years }}"
+        run: |
+          if [ -n "${{ inputs.cutoff }}" ]; then
+            python advance_gameweek.py --test --cutoff "${{ inputs.cutoff }}"
+          else
+            python advance_gameweek.py --test --shift-years "${{ inputs.shift_years }}"
+          fi

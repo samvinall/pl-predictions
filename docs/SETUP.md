@@ -382,14 +382,28 @@ refuses to write it. To exercise the Gameweeks tab / pre-picking against real
 fixtures before the new season's data exists, seed test data:
 
 ```bash
-python3 advance_gameweek.py --test          # last season, all dates +1 year
+python3 advance_gameweek.py --test          # last season, all dates +1 year (all weeks upcoming)
 python3 advance_gameweek.py --test --shift-years 1
+python3 advance_gameweek.py --test --cutoff 20   # mid-season: GW20 is "now"
 python3 advance_gameweek.py --clean         # remove everything the seed wrote
 ```
 
+Two anchoring modes:
+
+- **Default (`--shift-years N`, default 1):** the whole calendar sits in the
+  real future — every week is "upcoming" now. Use the client **Time Machine** to
+  scrub how weeks render, and season predictions are open with the final answers
+  seeded (so resolution + the Final Table can be tested).
+- **`--cutoff N`:** anchor so **gameweek N is the current, still-open week right
+  now** — i.e. simulate being partway through the season. Weeks 1..N-1 are locked
+  with real results, weeks N+1.. are upcoming and pickable, standings reflect only
+  the played weeks, and season predictions are locked but *not* resolved (no Final
+  Table). A faithful mid-season snapshot against the real clock — no Time Machine
+  needed. (In the Actions workflow, set the `cutoff` input instead of `shift_years`.)
+
 The seed writes (all tagged `{ test: true }`) from last season's data, dates
-shifted forward so the calendar plays as the upcoming season — every deadline
-lands in the real future, so pick-writes are genuinely accepted:
+shifted forward so the pickable weeks land in the real future and pick-writes
+are genuinely accepted:
 
 - `config/schedule` + `config/current` — the week calendar (drives the
   Gameweeks tab + pre-picking).
