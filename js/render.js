@@ -575,9 +575,9 @@ export function computeWeeklyTotals(allPicks, results, goalsByKey, concededByKey
 }
 
 // Season-prediction points per player (email -> points), scored ONLY from the
-// GW0 predictions against the final answers. Golden Boot correct = 10 (×2 if
-// unique), champion correct = 5 (×2 if unique). Completely independent of the
-// weekly table; combined with it only in the end-of-season Final Table.
+// GW0 predictions against the final answers. Golden Boot + champion each score
+// GOLDEN_BOOT_BONUS / CHAMPION_BONUS (×2 if unique). Completely independent of
+// the weekly table; combined with it only in the end-of-season Final Table.
 export function computeSeasonPoints(seasonPicks, seasonResults) {
   const out = {};
   if (!seasonResults || !seasonPicks || !seasonPicks.length) return out;

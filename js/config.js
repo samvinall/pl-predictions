@@ -21,11 +21,11 @@ export const BONUS_MULTIPLIER = 2;
 export const WIN_POINTS = 1;
 
 // Season-long (GW0) predictions, scored once at season end. Each doubles (via
-// BONUS_MULTIPLIER) if you're the only one to get it right -> 5 pts each, 10 if
+// BONUS_MULTIPLIER) if you're the only one to get it right -> 3 pts each, 6 if
 // unique. Kept deliberately modest so predictions add spice to the end-of-season
 // Final Table without overshadowing the weekly grind.
-export const GOLDEN_BOOT_BONUS = 5;
-export const CHAMPION_BONUS = 5;
+export const GOLDEN_BOOT_BONUS = 3;
+export const CHAMPION_BONUS = 3;
 
 // Goalfest is capped at this many goals PER winning fixture, so a blowout can't
 // run away with the season (a 5-0 still scores 3, ×2 = 6 if unique).
@@ -46,7 +46,7 @@ export const GOALFEST_CAP = 3;
 //   multipick    -> pick two teams this week; a flat win point if either wins
 //                   (unique bonus if the winning team is unique). Both teams
 //                   are then used up.
-export const SCORECARD_BONUS = 5;
+export const SCORECARD_BONUS = 3;
 export const CHIPS = {
   double:       { label: "Double Down",   desc: "Doubles the points you score this week. Stacks on top of the unique-pick bonus." },
   doublechance: { label: "Double Chance", desc: "Your team only needs to avoid defeat — a draw scores the same as a win this week (both fixtures in a double gameweek)." },

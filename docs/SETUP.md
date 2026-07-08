@@ -329,7 +329,7 @@ unique-pick bonus.
   instead of the flat win point. (In a double gameweek it sums the capped
   goals from each winning fixture.)
 - **Scorecard** — predict the exact scoreline of your team's match; nail
-  it for a flat **+5** (set by `SCORECARD_BONUS`), *regardless* of the
+  it for a flat **+3** (set by `SCORECARD_BONUS`), *regardless* of the
   result — you can score it on a losing scoreline. The prediction is
   entered from your team's perspective ("your team _ – _ opponent"), so
   home/away doesn't matter. In a double gameweek the prediction is judged
@@ -440,9 +440,9 @@ A **Season** tab lets each player predict, once, before the transfer window
 shuts:
 
 - **Golden Boot** — the season's top scorer, chosen from a type-to-search list
-  of every PL player. Worth **5 pts**, doubled to **10** if you're the only
+  of every PL player. Worth **3 pts**, doubled to **6** if you're the only
   one to pick that player.
-- **Champion** (optional) — worth **5 pts**, doubled to **10** if unique.
+- **Champion** (optional) — worth **3 pts**, doubled to **6** if unique.
 
 Mechanics:
 
