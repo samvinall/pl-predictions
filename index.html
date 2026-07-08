@@ -112,6 +112,18 @@
 
     <!-- SEASON -->
     <section id="tab-season" class="tab-panel" role="tabpanel">
+      <div class="card" id="final-table-card" style="display:none; border-color:var(--gold);">
+        <h2>Final Table</h2>
+        <p class="eyebrow">End-of-season standings — weekly points plus season-prediction points, combined. Only appears once the season's results are in.</p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th></th><th>Player</th><th title="Points from weekly picks">Weekly</th><th title="Points from season predictions">Season</th><th>Total</th></tr>
+            </thead>
+            <tbody id="final-table-body"></tbody>
+          </table>
+        </div>
+      </div>
       <div class="card" id="season-card">
         <h2>Season Predictions</h2>
         <div id="season-body"></div>

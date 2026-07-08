@@ -14,7 +14,8 @@ import { multipickOutcomes } from "./scoring.js";
 import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist, setupTimeMachine } from "./admin.js";
 import {
   startDeadlineCountdown, renderWeek, currentGameweek,
-  renderLeaderboard, renderProfile, renderRules,
+  renderLeaderboard, computeWeeklyTotals, computeSeasonPoints,
+  renderProfile, renderRules,
 } from "./render.js";
 import { renderSeason } from "./season.js";
 import { initTabs } from "./tabs.js";
@@ -260,10 +261,27 @@ async function loadEverything() {
     else simEl.style.display = "none";
   }
 
+  // End-of-season Final Table: weekly points + season-prediction points, only
+  // once the admin has published the answers (config/season_results). Kept out
+  // of the live weekly table so mid-season standings never include predictions.
+  let finalTable = null;
+  if (seasonResults && (seasonResults.goldenBootId != null || seasonResults.champion)) {
+    const weekly = computeWeeklyTotals(allPicks, results, goalsByKey, concededByKey, popularity);
+    const season = computeSeasonPoints(seasonPicks, seasonResults);
+    const nameByEmail = {};
+    seasonPicks.forEach(sp => { nameByEmail[sp.email] = store.names[sp.uid] || sp.name || sp.email; });
+    Object.entries(weekly).forEach(([email, t]) => { nameByEmail[email] = t.name || nameByEmail[email] || email; });
+    finalTable = [...new Set([...Object.keys(weekly), ...Object.keys(season)])].map(email => {
+      const w = weekly[email] ? weekly[email].points : 0;
+      const s = season[email] || 0;
+      return { email, name: nameByEmail[email] || email, weekly: w, season: s, total: w + s };
+    }).sort((a, b) => b.total - a.total || b.weekly - a.weekly);
+  }
+
   renderProfile();
   renderWeek();
-  renderSeason({ open: seasonOpenSim, deadline: seasonDeadline, results: seasonResults, standings, players, seasonPicks, myPick: mySeasonPick });
-  renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity, seasonPicks, seasonResults);
+  renderSeason({ open: seasonOpenSim, deadline: seasonDeadline, results: seasonResults, standings, players, seasonPicks, myPick: mySeasonPick, finalTable });
+  renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity);
 }
 
 // Turn the mirrored config/schedule doc into store.schedule (a sorted list of
