@@ -168,6 +168,24 @@
     padding:0.35rem 0.7rem;
   }
   #week-status{ flex:1; min-width:12rem; }
+  /* "Current selection" box + Save/Discard actions on the pick card */
+  .current-selection{
+    display:flex; flex-wrap:wrap; align-items:baseline; gap:0.5rem;
+    background:var(--paper-2);
+    border:1px solid var(--line);
+    border-left:3px solid var(--gold);
+    border-radius:6px;
+    padding:0.55rem 0.8rem;
+    margin:0 0 0.9rem;
+  }
+  .cs-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.62rem; text-transform:uppercase; letter-spacing:0.1em;
+    color:var(--muted);
+  }
+  .cs-pick{ font-size:0.95rem; }
+  .cs-pick.empty{ color:var(--muted); font-style:italic; font-size:0.85rem; }
+  .pick-actions{ display:flex; gap:0.6rem; margin-top:0.9rem; }
   .team-grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(140px,1fr));

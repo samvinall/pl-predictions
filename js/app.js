@@ -255,6 +255,9 @@ async function loadEverything() {
     const cur = currentGameweek();
     store.selectedGameweek = (cur != null && validGws.includes(cur)) ? cur : store.currentConfig.gameweek;
   }
+  // A fresh load is server truth -- drop any staged draft so it re-inits from
+  // the saved pick (also how a failed save re-syncs).
+  store.draft = null;
 
   // Time Machine indicator: a persistent reminder while a simulated clock is on.
   const simEl = document.getElementById("sim-indicator");
