@@ -21,19 +21,26 @@ export const BONUS_MULTIPLIER = 2;
 export const WIN_POINTS = 1;
 
 // Season-long (GW0) predictions, scored once at season end. Each doubles (via
-// BONUS_MULTIPLIER) if you're the only one to get it right.
-export const GOLDEN_BOOT_BONUS = 10;
+// BONUS_MULTIPLIER) if you're the only one to get it right -> 5 pts each, 10 if
+// unique. Kept deliberately modest so predictions add spice to the end-of-season
+// Final Table without overshadowing the weekly grind.
+export const GOLDEN_BOOT_BONUS = 5;
 export const CHAMPION_BONUS = 5;
+
+// Goalfest is capped at this many goals PER winning fixture, so a blowout can't
+// run away with the season (a 5-0 still scores 3, ×2 = 6 if unique).
+export const GOALFEST_CAP = 3;
 
 // Chips: at most one per week, and each chip can be played once per
 // half-season (the two halves split at the GW20 reshuffle). Chip
-// effects STACK with the unique-pick bonus above.
+// effects STACK with the unique-pick bonus above (which always doubles the
+// whole week, including the Scorecard flat bonus).
 //   double       -> doubles the week's win points
 //   doublechance -> a draw scores the same as a win this week (your team
 //                   only needs to avoid defeat)
 //   goalfest     -> if your team wins, you score the goals it scored that
-//                   fixture instead of the flat win point (falls back to a
-//                   normal win if goals aren't known)
+//                   fixture (capped at GOALFEST_CAP) instead of the flat win
+//                   point (falls back to a normal win if goals aren't known)
 //   scorecard    -> predict the exact scoreline; nail it for a flat bonus,
 //                   regardless of whether the team won
 //   multipick    -> pick two teams this week; a flat win point if either wins
@@ -43,8 +50,8 @@ export const SCORECARD_BONUS = 5;
 export const CHIPS = {
   double:       { label: "Double Down",   desc: "Doubles the points you score this week. Stacks on top of the unique-pick bonus." },
   doublechance: { label: "Double Chance", desc: "Your team only needs to avoid defeat — a draw scores the same as a win this week (both fixtures in a double gameweek)." },
-  goalfest:     { label: "Goalfest",      desc: "If your team wins, you score the number of goals it scored that match instead of the flat 1 point (goals from both fixtures in a double gameweek)." },
-  scorecard:    { label: "Scorecard",     desc: `Predict your team's exact scoreline. Nail it for a flat +${SCORECARD_BONUS} — even on a draw or loss. Judged on the first fixture in a double gameweek.` },
+  goalfest:     { label: "Goalfest",      desc: `If your team wins, you score the goals it scored that match (up to ${GOALFEST_CAP}) instead of the flat 1 point (goals from both fixtures in a double gameweek).` },
+  scorecard:    { label: "Scorecard",     desc: `Predict your team's exact scoreline. Nail it for a flat +${SCORECARD_BONUS} — even on a draw or loss (doubled if your pick is unique). Judged on the first fixture in a double gameweek.` },
   multipick:    { label: "Multipick",     desc: "Pick two teams this week; if either wins you score the win (unique bonus applies if the winning team is unique). Both teams are then used up." },
 };
 export const halfOf = gw => (gw < UNLOCK_GAMEWEEK ? 1 : 2);

@@ -2,7 +2,7 @@
 // Pure scoring + formatting logic. No DOM, no Firebase — just functions of
 // their inputs, so this module is unit-testable on its own (see test/).
 // ---------------------------------------------------------------------------
-import { WIN_POINTS, BONUS_MULTIPLIER, UNIQUE_THRESHOLD, SCORECARD_BONUS } from "./config.js";
+import { WIN_POINTS, BONUS_MULTIPLIER, UNIQUE_THRESHOLD, SCORECARD_BONUS, GOALFEST_CAP } from "./config.js";
 
 // Shared scoring so the leaderboard and history never disagree. Takes
 // one pick's outcomes, the goals the team scored and conceded (both
@@ -31,25 +31,20 @@ export function scorePick(outcomes, goals, conceded, chip, scorecard, popCount) 
   let base;
   if (chip === "goalfest") {
     const g = Array.isArray(goals) && goals.length === outcomes.length ? goals : null;
-    // Sum the goals scored in each winning fixture. If goals aren't
+    // Sum the goals scored in each winning fixture, capped per fixture at
+    // GOALFEST_CAP so a blowout can't run away with it. If goals aren't
     // recorded, fall back to scoring it as an ordinary win.
-    base = g ? scoringIdx.reduce((sum, i) => sum + (Number(g[i]) || 0), 0)
+    base = g ? scoringIdx.reduce((sum, i) => sum + Math.min(Number(g[i]) || 0, GOALFEST_CAP), 0)
              : scoringIdx.length * WIN_POINTS;
   } else {
     base = scoringIdx.length * WIN_POINTS;
     if (chip === "double") base *= 2;
   }
 
-  // The unique-pick bonus multiplies the whole (chip-adjusted) base, and
-  // stacks with chips (chosen house rule). bonusPts is the extra it adds.
-  const bonus = base > 0 && popCount <= UNIQUE_THRESHOLD;
-  const bonusPts = bonus ? base * (BONUS_MULTIPLIER - 1) : 0;
-
   // Scorecard: a flat bonus for calling the exact scoreline of the
   // team's fixture -- independent of the result (you can nail a losing
-  // scoreline) and NOT multiplied by the unique bonus. The prediction
-  // is tied to the gameweek's first fixture (index 0); in a double
-  // gameweek it must match that specific game, not whichever one fits.
+  // scoreline). The prediction is tied to the gameweek's first fixture
+  // (index 0); in a double gameweek it must match that specific game.
   let scorecardHit = false, scorecardFlat = 0;
   if (chip === "scorecard" && scorecard
       && Array.isArray(goals) && goals.length === outcomes.length
@@ -61,7 +56,14 @@ export function scorePick(outcomes, goals, conceded, chip, scorecard, popCount) 
     if (scorecardHit) scorecardFlat = SCORECARD_BONUS;
   }
 
-  const pts = base + bonusPts + scorecardFlat;
+  // The unique-pick bonus doubles the WHOLE week -- the chip-adjusted base
+  // AND the Scorecard flat bonus (uniqueness always doubles, no carve-outs).
+  // bonusPts is the extra it adds.
+  const uniqueBase = base + scorecardFlat;
+  const bonus = uniqueBase > 0 && popCount <= UNIQUE_THRESHOLD;
+  const bonusPts = bonus ? uniqueBase * (BONUS_MULTIPLIER - 1) : 0;
+
+  const pts = uniqueBase + bonusPts;
   // The Scorecard flat bonus is itself a chip effect, so it counts as chip
   // points alongside the double/goalfest/double-chance contribution.
   const chipPts = (base - raw) + scorecardFlat;

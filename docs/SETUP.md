@@ -325,14 +325,14 @@ unique-pick bonus.
   scores. A draw played this way earns points but still shows as a "D" in
   your form and doesn't count towards the "Won" column — only real wins do.
 - **Goalfest** — if your team wins, you score the number of goals your
-  team scored that fixture, instead of the flat win point. (In a double
-  gameweek it sums the goals from each winning fixture.)
+  team scored that fixture (capped at `GOALFEST_CAP`, default **3**),
+  instead of the flat win point. (In a double gameweek it sums the capped
+  goals from each winning fixture.)
 - **Scorecard** — predict the exact scoreline of your team's match; nail
   it for a flat **+5** (set by `SCORECARD_BONUS`), *regardless* of the
   result — you can score it on a losing scoreline. The prediction is
   entered from your team's perspective ("your team _ – _ opponent"), so
-  home/away doesn't matter. The +5 is flat and is **not** multiplied by
-  the unique-pick bonus. In a double gameweek the prediction is judged
+  home/away doesn't matter. In a double gameweek the prediction is judged
   against the team's **first** fixture only, not whichever one happens
   to fit.
 - **Multipick** — back **two** teams this week; if *either* wins you score a
@@ -440,7 +440,7 @@ A **Season** tab lets each player predict, once, before the transfer window
 shuts:
 
 - **Golden Boot** — the season's top scorer, chosen from a type-to-search list
-  of every PL player. Worth **10 pts**, doubled to **20** if you're the only
+  of every PL player. Worth **5 pts**, doubled to **10** if you're the only
   one to pick that player.
 - **Champion** (optional) — worth **5 pts**, doubled to **10** if unique.
 
