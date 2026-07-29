@@ -598,11 +598,16 @@ export function computeSeasonPoints(seasonPicks, seasonResults) {
 // deliberately excluded here; they surface only in the Final Table at season
 // end (see season.js), so mid-season standings can't be swung by predictions.
 export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity) {
+  renderTableFilter();
   const totals = computeWeeklyTotals(allPicks, results, goalsByKey, concededByKey, popularity);
+  const paid = store.paidEmails || new Set();
+  const isPaid = email => paid.has((email || "").toLowerCase());
 
   const ppw = v => (v.played ? v.points / v.played : 0);
+  const filter = store.tableFilter || "all";
   const rows = Object.entries(totals)
     .map(([email, v]) => ({ email, ...v }))
+    .filter(r => filter === "all" || (filter === "paid" ? isPaid(r.email) : !isPaid(r.email)))
     // Points first; ties broken by points-per-week-played, then by
     // number of weeks won.
     .sort((a, b) => b.points - a.points || ppw(b) - ppw(a) || b.won - a.won);
@@ -610,7 +615,8 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
   const body = document.getElementById("leaderboard-body");
   body.innerHTML = "";
   if (rows.length === 0) {
-    body.innerHTML = `<tr><td colspan="10" class="empty">No scored picks yet.</td></tr>`;
+    const none = filter === "all" ? "No scored picks yet." : `No ${filter === "paid" ? "paid" : "non-paid"} players with scored picks yet.`;
+    body.innerHTML = `<tr><td colspan="10" class="empty">${none}</td></tr>`;
     return;
   }
   rows.forEach((r, i) => {
@@ -622,6 +628,7 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
     const crown = i === 0 && r.points > 0 ? ` <span class="crown" title="Top of the table">👑</span>` : "";
     const flame = wStreak >= 2 ? ` <span class="streak" title="${wStreak} winning weeks in a row">🔥${wStreak}</span>` : "";
     const ice = wStreak === 0 && cStreak >= 3 ? ` <span class="streak" title="${cStreak} weeks without a win">🧊</span>` : "";
+    const paidTag = isPaid(r.email) ? ` <span class="paid-tag" title="Paid member">💷</span>` : "";
     // Chips played: a count, with the specific chips + gameweeks on hover.
     const chipsTitle = r.chips
       .sort((a, b) => a.gw - b.gw)
@@ -629,13 +636,31 @@ export function renderLeaderboard(allPicks, results, goalsByKey, concededByKey, 
       .join(", ");
     const chipsCell = r.chips.length ? `<span title="${chipsTitle}">${r.chips.length}</span>` : "–";
     tr.innerHTML = `<td class="rank rank-${i + 1}">${i + 1}</td>`
-      + `<td>${r.name}${crown}${flame}${ice}</td>`
+      + `<td>${r.name}${paidTag}${crown}${flame}${ice}</td>`
       + `<td>${r.played}</td><td>${r.won}</td>`
       + `<td class="form-cell">${renderForm(r.form)}</td>`
       + `<td>${perWeek}</td>`
       + `<td>${chipsCell}</td><td>${r.chipPts || "–"}</td><td>${r.bonusPts || "–"}</td>`
       + `<td><strong>${r.points}</strong></td>`;
     body.appendChild(tr);
+  });
+}
+
+// The Overall / Paid / Non-paid segmented filter above the league table.
+// Switching just re-renders from the cached datasets on `store` -- no refetch.
+function renderTableFilter() {
+  const el = document.getElementById("table-filter");
+  if (!el) return;
+  const cur = store.tableFilter || "all";
+  const opts = [["all", "Overall"], ["paid", "Paid"], ["unpaid", "Non-paid"]];
+  el.innerHTML = opts
+    .map(([id, label]) => `<button class="filter-btn${cur === id ? " selected" : ""}" data-filter="${id}">${label}</button>`)
+    .join("");
+  el.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.onclick = () => {
+      store.tableFilter = btn.dataset.filter;
+      renderLeaderboard(store.allPicks, store.results, store.goalsByKey, store.concededByKey, store.popularity);
+    };
   });
 }
 

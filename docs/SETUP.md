@@ -290,6 +290,15 @@ from your phone, same as the manual result override.
 The very first time, the list is empty and only you (the admin) can get in
 — add everyone else from the admin card once you're signed in.
 
+## Paid members (league filter)
+
+Each guest-list row has a **paid** checkbox. Ticking it adds that email to
+`config/paid` (same shape as the allowlist). The **League Table** then shows
+an **Overall / Paid / Non-paid** filter, and paid players get a 💷 marker by
+their name. It's purely a view filter — everyone still plays one league; this
+just lets you see the standings among those who've chipped in. Removing a
+player from the guest list also drops them from the paid list.
+
 ## Double gameweeks
 
 Occasionally a team plays twice within the same gameweek (fixture

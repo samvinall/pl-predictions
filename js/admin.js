@@ -87,6 +87,14 @@ export async function loadAllowlist() {
   return [...new Set(emails.map(e => (e || "").toLowerCase()))].sort();
 }
 
+// Admin-only: the "paid" members list (config/paid), same shape as the
+// allowlist. Drives the Paid / Non-paid / Overall filter on the league table.
+export async function loadPaidList() {
+  const snap = await getDoc(doc(db, "config", "paid"));
+  const emails = (snap.exists() && snap.data().emails) || [];
+  return [...new Set(emails.map(e => (e || "").toLowerCase()))].sort();
+}
+
 export function setupAccessPanel() {
   const input = document.getElementById("allow-email");
   const msg = document.getElementById("allow-msg");
@@ -114,31 +122,59 @@ export function setupAccessPanel() {
         msg.className = "msg ok";
         input.value = "";
       }
-      renderAllowlist(await loadAllowlist());
+      await refreshAccess();
     } catch (e) {
       msg.textContent = `Couldn't save: ${e.message}`;
       msg.className = "msg error";
     }
   };
 
-  // Remove buttons are wired up via event delegation in renderAllowlist.
+  // Remove buttons are wired up via event delegation in renderAllowlist. A
+  // removed guest is also dropped from the paid list so nothing lingers.
   document.getElementById("allow-list").onclick = async (ev) => {
     const btn = ev.target.closest("button[data-remove]");
     if (!btn) return;
     const email = btn.getAttribute("data-remove");
     try {
-      const emails = (await loadAllowlist()).filter(e => e !== email);
-      await save(emails);
+      await save((await loadAllowlist()).filter(e => e !== email));
+      const paid = (await loadPaidList()).filter(e => e !== email);
+      await setDoc(doc(db, "config", "paid"), { emails: paid }, { merge: true });
       msg.textContent = `Removed ${email}.`;
       msg.className = "msg ok";
-      renderAllowlist(emails);
+      await refreshAccess();
     } catch (e) {
       msg.textContent = `Couldn't save: ${e.message}`;
       msg.className = "msg error";
     }
   };
 
-  loadAllowlist().then(renderAllowlist).catch(() => {});
+  // Paid checkboxes (event delegation): toggle an email in config/paid.
+  document.getElementById("allow-list").onchange = async (ev) => {
+    const cb = ev.target.closest("input[type=checkbox][data-paid]");
+    if (!cb) return;
+    const email = cb.getAttribute("data-paid");
+    try {
+      const paid = new Set(await loadPaidList());
+      if (cb.checked) paid.add(email); else paid.delete(email);
+      await setDoc(doc(db, "config", "paid"), { emails: [...paid].sort() }, { merge: true });
+      msg.textContent = `${email} marked ${cb.checked ? "paid" : "unpaid"}.`;
+      msg.className = "msg ok";
+    } catch (e) {
+      msg.textContent = `Couldn't save: ${e.message}`;
+      msg.className = "msg error";
+      cb.checked = !cb.checked;   // revert the toggle on failure
+    }
+  };
+
+  refreshAccess();
+}
+
+// Load the guest list + paid list together and render the rows.
+async function refreshAccess() {
+  try {
+    const [emails, paid] = await Promise.all([loadAllowlist(), loadPaidList()]);
+    renderAllowlist(emails, new Set(paid));
+  } catch (e) { /* leave whatever's shown */ }
 }
 
 // Admin-only: override any player's display name. Writes profiles/{uid}
@@ -274,16 +310,20 @@ export function setupSeasonAdmin(players, season, results) {
   };
 }
 
-function renderAllowlist(emails) {
+function renderAllowlist(emails, paid) {
   const el = document.getElementById("allow-list");
   if (!el) return;
+  paid = paid || new Set();
   if (!emails || emails.length === 0) {
     el.innerHTML = `<p class="empty">No one added yet — only you can get in.</p>`;
     return;
   }
   el.innerHTML = emails
     .map(e => `<div class="pick-tile" style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem;">
-      <span class="mono" style="font-size:0.78rem;">${e}</span>
+      <span class="mono" style="font-size:0.78rem; flex:1; min-width:8rem; overflow:hidden; text-overflow:ellipsis;">${e}</span>
+      <label class="eyebrow" style="display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; cursor:pointer;">
+        <input type="checkbox" data-paid="${e}"${paid.has(e) ? " checked" : ""} style="vertical-align:middle;" /> paid
+      </label>
       <button class="ghost" data-remove="${e}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Remove</button>
     </div>`)
     .join("");
