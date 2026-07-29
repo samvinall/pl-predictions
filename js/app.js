@@ -11,7 +11,7 @@ import {
 import { ADMIN_EMAIL } from "./config.js";
 import { store, nowDate } from "./store.js";
 import { multipickOutcomes } from "./scoring.js";
-import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist, setupTimeMachine } from "./admin.js";
+import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist, loadPaidList, setupTimeMachine } from "./admin.js";
 import {
   startDeadlineCountdown, renderWeek, currentGameweek,
   renderLeaderboard, computeWeeklyTotals, computeSeasonPoints,
@@ -134,6 +134,9 @@ async function loadEverything() {
   const allowedEmails = new Set([ADMIN_EMAIL.toLowerCase(), ...(await loadAllowlist())]);
   const allPicks = Array.from(picksById.values())
     .filter(p => allowedEmails.has((p.email || "").toLowerCase()));
+
+  // "Paid" members -> drives the league-table Paid / Non-paid filter + marker.
+  store.paidEmails = new Set(await loadPaidList());
 
   // Resolve chosen display names (profiles/{uid}) -> store.names, used
   // wherever a player's name is shown (sheet, table, history, whoami).
