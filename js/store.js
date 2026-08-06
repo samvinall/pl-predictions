@@ -23,6 +23,7 @@ export const store = {
   selectTab: null,         // set by initTabs(); selectTab(id) switches tab
   showingDenied: false,    // are we showing the "not on the guest list" screen?
   reload: async () => {},  // set to loadEverything() during boot
+  chatUnsub: null,         // live chat listener's unsubscribe fn (see chat.js)
 
   // Admin "Time Machine": a client-only offset (ms) added to the real clock so
   // the admin can simulate a different "now" and see how the Gameweeks tab

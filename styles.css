@@ -252,6 +252,42 @@
   .filter-btn:hover{ background:var(--paper-2); }
   .filter-btn.selected{ background:var(--gold); border-color:var(--gold); color:var(--pitch-dark); font-weight:700; }
   .paid-tag{ font-size:0.8rem; }
+  /* League chat */
+  .chat-list{
+    max-height:55vh; overflow-y:auto;
+    display:flex; flex-direction:column; gap:0.5rem;
+    padding:0.2rem 0.1rem; margin:0.4rem 0 0.9rem;
+  }
+  .chat-msg{
+    background:var(--paper-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:0.45rem 0.65rem;
+    max-width:85%; align-self:flex-start;
+  }
+  .chat-msg.chat-mine{
+    align-self:flex-end;
+    border-left:3px solid var(--gold);
+  }
+  .chat-meta{
+    display:flex; align-items:center; gap:0.4rem;
+    font-family:'JetBrains Mono', monospace; font-size:0.62rem;
+    color:var(--muted); margin-bottom:0.15rem;
+  }
+  .chat-meta strong{ color:var(--ink); font-size:0.72rem; }
+  .chat-text{ font-size:0.9rem; white-space:pre-wrap; word-break:break-word; }
+  .chat-del{
+    margin-left:auto; background:transparent; border:none; color:var(--muted);
+    font-size:0.9rem; line-height:1; padding:0 0.2rem; cursor:pointer;
+  }
+  .chat-del:hover{ color:#8a1f1f; background:transparent; }
+  .chat-compose{ display:flex; gap:0.5rem; align-items:flex-end; }
+  .chat-compose textarea{
+    flex:1; resize:vertical; min-height:2.4rem; max-height:8rem;
+    font-family:'JetBrains Mono', monospace; font-size:0.9rem;
+    padding:0.55rem 0.7rem; border:1px solid var(--line); border-radius:8px;
+    background:#fff8ea; color:var(--ink);
+  }
   table{ width:100%; border-collapse:collapse; font-family:'JetBrains Mono', monospace; font-size:0.82rem; }
   th, td{ text-align:left; padding:0.45rem 0.4rem; border-bottom:1px solid var(--paper-2); }
   th{ text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em; color:var(--muted); }

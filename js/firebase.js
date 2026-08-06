@@ -8,7 +8,8 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs
+  getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs,
+  addDoc, orderBy, limit, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "./config.js";
 
@@ -22,3 +23,4 @@ export const provider = new GoogleAuthProvider();
 export { signInWithPopup, signOut, onAuthStateChanged };
 // Firestore helpers
 export { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs };
+export { addDoc, orderBy, limit, onSnapshot, serverTimestamp };
