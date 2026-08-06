@@ -299,6 +299,17 @@ their name. It's purely a view filter — everyone still plays one league; this
 just lets you see the standings among those who've chipped in. Removing a
 player from the guest list also drops them from the paid list.
 
+## League chat
+
+A **Chat** tab gives the league a single group-chat room, backed by the
+`messages` collection (`{ uid, name, email, text, createdAt }`). It's the one
+place the app uses a live Firestore listener (`onSnapshot`), so posts appear in
+real time. Any allow-listed player can read the chat and post as themselves
+(messages are capped at 1000 chars and HTML-escaped on render, so text can't
+inject markup); you can delete your own messages and the admin can delete any.
+The listener is torn down on sign-out. No extra setup — the `messages` rules
+are in `firestore.rules` and deploy with everything else.
+
 ## Double gameweeks
 
 Occasionally a team plays twice within the same gameweek (fixture

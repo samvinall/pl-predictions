@@ -18,6 +18,7 @@ import {
   renderProfile, renderRules,
 } from "./render.js";
 import { renderSeason } from "./season.js";
+import { setupChat, teardownChat } from "./chat.js";
 import { initTabs } from "./tabs.js";
 
 // View/admin code refreshes by calling store.reload() so it never has to
@@ -83,9 +84,11 @@ onAuthStateChanged(auth, async (user) => {
       setupTimeMachine();
     }
 
+    setupChat();   // live group-chat listener (all players)
     await loadEverything();
   } else {
     document.getElementById("app").style.display = "none";
+    teardownChat();   // stop the live chat listener once signed out
     // Don't clobber the denial screen with the sign-in gate when the
     // sign-out was triggered by us turning an unlisted account away.
     if (!store.showingDenied) {

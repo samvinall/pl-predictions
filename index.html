@@ -52,6 +52,7 @@
       <button class="tab-btn" data-tab="pick" role="tab">Gameweeks</button>
       <button class="tab-btn" data-tab="season" id="tab-btn-season" role="tab">Season</button>
       <button class="tab-btn" data-tab="table" role="tab">Table</button>
+      <button class="tab-btn" data-tab="chat" role="tab">Chat</button>
       <button class="tab-btn" data-tab="settings" role="tab">Settings</button>
       <button class="tab-btn" data-tab="rules" role="tab">Rules</button>
       <button class="tab-btn" data-tab="admin" id="tab-btn-admin" role="tab" style="display:none;">Admin</button>
@@ -150,6 +151,19 @@
             </thead>
             <tbody id="leaderboard-body"></tbody>
           </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHAT -->
+    <section id="tab-chat" class="tab-panel" role="tabpanel">
+      <div class="card" id="chat-card">
+        <h2>League Chat</h2>
+        <p class="eyebrow">Everyone in the league can see this. Be nice.</p>
+        <div id="chat-list" class="chat-list"></div>
+        <div class="chat-compose">
+          <textarea id="chat-input" rows="1" maxlength="1000" placeholder="Message the league…"></textarea>
+          <button id="chat-send">Send</button>
         </div>
       </div>
     </section>
