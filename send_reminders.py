@@ -83,6 +83,29 @@ def _doc(db, name):
     return db.collection("config").document(name).get().to_dict() or {}
 
 
+def send_emails(cfg, recipients, subject, body):
+    """Send one message to each recipient over SMTP. `cfg` is
+    (host, port, user, password, from_email, from_name). Returns how many
+    were sent OK; a single bad address doesn't stop the rest."""
+    host, port, user, password, from_email, from_name = cfg
+    sent_ok = 0
+    with smtplib.SMTP(host, port) as server:
+        server.starttls()
+        server.login(user, password)
+        for to in recipients:
+            msg = EmailMessage()
+            msg["Subject"] = subject
+            msg["From"] = f"{from_name} <{from_email}>"
+            msg["To"] = to
+            msg.set_content(body)
+            try:
+                server.send_message(msg)
+                sent_ok += 1
+            except Exception as e:
+                print(f"  ✗ {to}: {e}")
+    return sent_ok
+
+
 def main():
     host = os.environ.get("SMTP_HOST")
     user = os.environ.get("SMTP_USER")
@@ -95,6 +118,24 @@ def main():
     from_email = os.environ.get("FROM_EMAIL", user)
     from_name = os.environ.get("FROM_NAME", "Prem Picks")
     site_url = os.environ.get("SITE_URL", DEFAULT_SITE_URL)
+    cfg = (host, port, user, password, from_email, from_name)
+
+    # TEST MODE: send a single sample email to one address and stop. Set via the
+    # workflow's `test_to` input (TEST_TO env). Bypasses the deadline window,
+    # recipient list and dedupe -- purely for checking delivery/formatting.
+    test_to = os.environ.get("TEST_TO", "").strip()
+    if test_to:
+        subject = "⚽ Prem Picks — test reminder"
+        body = (
+            "This is a test of the Prem Picks deadline reminder emails.\n\n"
+            "When a gameweek deadline is ~24h away, players get a nudge with a "
+            f"link to make their pick:\n{site_url}\n\n"
+            "If this landed in your inbox (not spam), you're good to go.\n\n"
+            "— Prem Picks"
+        )
+        n = send_emails(cfg, [test_to], subject, body)
+        print(f"✅ Test email: sent {n}/1 to {test_to}.")
+        return
 
     db = get_db()
     current = _doc(db, "current")
@@ -135,22 +176,7 @@ def main():
     hours_left = int((deadline - now).total_seconds() // 3600)
     subject, body = build_message(gw, deadline, hours_left, site_url)
 
-    sent_ok = 0
-    with smtplib.SMTP(host, port) as server:
-        server.starttls()
-        server.login(user, password)
-        for to in recipients:
-            msg = EmailMessage()
-            msg["Subject"] = subject
-            msg["From"] = f"{from_name} <{from_email}>"
-            msg["To"] = to
-            msg.set_content(body)
-            try:
-                server.send_message(msg)
-                sent_ok += 1
-            except Exception as e:   # keep going; one bad address shouldn't stop the rest
-                print(f"  ✗ {to}: {e}")
-
+    sent_ok = send_emails(cfg, recipients, subject, body)
     print(f"✅ Sent {sent_ok}/{len(recipients)} GW{gw} reminders.")
 
     if sent_ok:
