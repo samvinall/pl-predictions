@@ -6,7 +6,12 @@ name: Deadline Reminders
 on:
   schedule:
     - cron: '30 */2 * * *'   # every 2 hours, offset from the data sync
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_to:
+        description: "Test only: send one sample email to this address (leave blank for a normal run)"
+        required: false
+        default: ""
 
 jobs:
   remind:
@@ -36,4 +41,5 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
           FROM_NAME: ${{ secrets.FROM_NAME }}
+          TEST_TO: ${{ inputs.test_to }}
         run: python send_reminders.py
