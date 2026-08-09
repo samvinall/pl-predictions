@@ -310,6 +310,36 @@ inject markup); you can delete your own messages and the admin can delete any.
 The listener is torn down on sign-out. No extra setup — the `messages` rules
 are in `firestore.rules` and deploy with everything else.
 
+## Deadline reminder emails
+
+`send_reminders.py` (run by `.github/workflows/reminders.yml`, every 2 hours)
+emails players ~24h before each gameweek deadline. Recipients:
+
+- **Before the first gameweek:** everyone on the guest list (`config/allowlist`).
+- **From then on:** anyone who has **paid** (`config/paid`) **or engaged** (made a
+  pick in any past gameweek), intersected with the guest list.
+
+It de-dupes via `config/reminders` (records which gameweeks were reminded), so
+the schedule never double-sends. Sending is plain SMTP configured by repository
+secrets, so it no-ops until you add them — and the same code works with Gmail,
+Outlook/Hotmail, or any transactional provider's SMTP:
+
+| Secret | Example (Gmail) | Example (Outlook/Hotmail) |
+|---|---|---|
+| `SMTP_HOST` | `smtp.gmail.com` | `smtp-mail.outlook.com` |
+| `SMTP_PORT` | `587` | `587` |
+| `SMTP_USER` | `you@gmail.com` | `you@hotmail.co.uk` |
+| `SMTP_PASS` | *app password* | *app password* |
+| `FROM_EMAIL` | *(optional; defaults to `SMTP_USER`)* | |
+| `FROM_NAME` | *(optional; defaults to "Prem Picks")* | |
+
+For Gmail/Outlook you need **2-factor auth on that account**, then generate an
+**app password** and use it as `SMTP_PASS` (not your normal password). Add the
+secrets under **Settings → Secrets and variables → Actions**. Emails are sent
+individually (no addresses exposed to each other). To move to a transactional
+service later (better deliverability at scale), just point the same `SMTP_*`
+secrets at that provider's SMTP endpoint — no code change.
+
 ## Double gameweeks
 
 Occasionally a team plays twice within the same gameweek (fixture
