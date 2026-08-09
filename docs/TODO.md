@@ -4,6 +4,7 @@ _(nothing outstanding)_
 
 # Done
 
+- ✅ Deadline reminder emails — `send_reminders.py` + `reminders.yml` email players ~24h before each deadline (GW1: everyone on the allowlist; after: paid or engaged), deduped via `config/reminders`, over generic SMTP (secrets; no-ops until set).
 - ✅ League chat — a **Chat** tab (all players) backed by a `messages` collection with a live Firestore listener; post/delete-own (admin deletes any), HTML-escaped, paid/name-aware. Paid-member filter (Overall/Paid/Non-paid) + 💷 marker on the league table.
 - ✅ Future-week selection — "Pick", "This Week" and "History" collapsed into one **Gameweeks** tab with a week navigator (‹ / dropdown / ›). Each week shows its own fixtures, status and (once locked) results; any week still before its deadline is pickable, so you can pre-pick ahead. A team picked for a future week is reserved immediately (no-repeat is per half-season). Per-week deadlines + fixtures are mirrored into `config/schedule`, and firestore.rules locks each pick at that week's real kickoff. ([plan](plans/future-weeks.md))
 - ✅ Display name moved to a **Settings** tab visible to all users (was on the old "This Week" tab). Admin name overrides stay in the Admin tab.
