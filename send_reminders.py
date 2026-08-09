@@ -109,7 +109,10 @@ def send_emails(cfg, recipients, subject, body):
 def main():
     host = os.environ.get("SMTP_HOST")
     user = os.environ.get("SMTP_USER")
-    password = os.environ.get("SMTP_PASS")
+    # Strip all whitespace: Gmail/Outlook show app passwords grouped with spaces
+    # ("abcd efgh ijkl mnop") and pasting those spaces is a common cause of a
+    # 535 "Username and Password not accepted" error.
+    password = "".join((os.environ.get("SMTP_PASS") or "").split())
     if not (host and user and password):
         print("ℹ️  SMTP not configured (SMTP_HOST / SMTP_USER / SMTP_PASS) — "
               "skipping reminders.")
