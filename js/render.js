@@ -67,13 +67,22 @@ const fixturesOf = gw => { const e = scheduleEntry(gw); return e ? e.fixtures : 
 const myPickFor = gw => store.myPicks.find(p => p.gameweek === gw) || null;
 
 // The "current" gameweek from the app's point of view: the earliest scheduled
-// week whose deadline hasn't passed (per the — possibly simulated — clock).
-// Falls back to the last scheduled week, then to config/current. This is what
-// makes the Time Machine move which week reads as "current"/"live".
+// week whose display window hasn't ended yet (per the — possibly simulated —
+// clock). A week stays "current" while its matches play and until ~a day after
+// its final kickoff, so mid-gameweek the tab keeps showing the live week rather
+// than jumping to next week the instant the deadline passes. Falls back to the
+// deadline if a week has no fixtures, then to the last week / config/current.
+// This is also what the Time Machine moves.
+const WEEK_TAIL_MS = 24 * 60 * 60 * 1000;   // keep a week "current" this long after its last kickoff
 export function currentGameweek() {
   const now = nowDate();
-  const upcoming = store.schedule.filter(s => s.deadline && s.deadline > now);
-  if (upcoming.length) return upcoming[0].gameweek;   // schedule is sorted ascending
+  for (const s of store.schedule) {          // sorted ascending by gameweek
+    const kos = (s.fixtures || [])
+      .map(f => (f.kickoff && f.kickoff.toDate ? f.kickoff.toDate().getTime() : null))
+      .filter(t => t != null);
+    const endBy = kos.length ? new Date(Math.max(...kos) + WEEK_TAIL_MS) : s.deadline;
+    if (endBy && endBy > now) return s.gameweek;
+  }
   if (store.schedule.length) return store.schedule[store.schedule.length - 1].gameweek;
   return store.currentConfig ? store.currentConfig.gameweek : null;
 }
@@ -391,7 +400,12 @@ function renderWeekResults(gw, open) {
         label = fmtResult(outcomes, goalsByKey[key], concededByKey[key]);
       }
       const team = isMulti && p.team2 ? `${p.team} + ${p.team2}` : p.team;
-      return { name: store.names[p.uid] || p.name, email: p.email, team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit };
+      // Is this a solo pick (nobody else on that team)? Shown as a "potential
+      // double" marker even before the result is in. For a Multipick, unique if
+      // either team is solo (mirrors scoreMultipick's isUnique).
+      const teams = isMulti ? [p.team, p.team2].filter(Boolean) : [p.team];
+      const unique = teams.some(t => (popularity[`${p.gameweek}_${t}`] || 0) <= UNIQUE_THRESHOLD);
+      return { name: store.names[p.uid] || p.name, email: p.email, team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit, unique };
     })
     .sort((a, b) => b.pts - a.pts);
 
@@ -407,9 +421,10 @@ function renderWeekResults(gw, open) {
   table.style.display = "";
   body.innerHTML = rows.map(r => {
     const cls = store.currentUser && r.email === store.currentUser.email ? ' class="me"' : "";
+    const uniqueTag = r.unique ? ` <span class="unique-tag" title="Only pick — points double if they win">💎</span>` : "";
     const bonusTag = r.bonus ? `<span class="bonus-tag">&times;${BONUS_MULTIPLIER}</span>` : "";
     const hitTag = r.scorecardHit ? `<span class="bonus-tag" title="Exact score!">🎯+${SCORECARD_BONUS}</span>` : "";
-    return `<tr${cls}><td>${r.name}</td><td>${r.team}${chipTag(r.chip, r.scorecard)}</td><td>${r.label}</td><td><strong>${r.pts}</strong>${bonusTag}${hitTag}</td></tr>`;
+    return `<tr${cls}><td>${r.name}</td><td>${r.team}${chipTag(r.chip, r.scorecard)}${uniqueTag}</td><td>${r.label}</td><td><strong>${r.pts}</strong>${bonusTag}${hitTag}</td></tr>`;
   }).join("");
 }
 

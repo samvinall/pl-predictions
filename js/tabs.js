@@ -19,6 +19,7 @@ export function initTabs() {
     document.querySelectorAll(".tab-panel").forEach(p => {
       p.classList.toggle("active", p.id === `tab-${id}`);
     });
+    if (id === "chat" && store.markChatSeen) store.markChatSeen();   // clear the unread dot
   };
 
   buttons.forEach(b => { b.onclick = () => select(b.dataset.tab); });
