@@ -22,11 +22,26 @@ export function setupChat() {
   const sendBtn = document.getElementById("chat-send");
   if (!list || !input || !sendBtn) return;
 
+  store.markChatSeen = markChatSeen;   // let tabs.js clear the badge when Chat opens
+
   teardownChat();
   const q = query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(100));
   store.chatUnsub = onSnapshot(
     q,
-    snap => renderMessages(list, snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse()),
+    snap => {
+      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
+      renderMessages(list, msgs);
+      // Newest message time (a pending serverTimestamp reads as null -> skip).
+      store.chatLatestMs = msgs.reduce((mx, m) => {
+        const t = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().getTime() : 0;
+        return t > mx ? t : mx;
+      }, 0);
+      // First ever load: baseline "seen" to now so old history isn't flagged.
+      if (lastSeenMs() === 0) setLastSeen(store.chatLatestMs || Date.now());
+      // If they're looking at Chat, it's seen live; otherwise badge if new.
+      if (chatTabActive()) markChatSeen();
+      else refreshChatBadge();
+    },
     err => { list.innerHTML = `<p class="empty">Couldn't load chat: ${esc(err.message)}</p>`; }
   );
 
@@ -70,6 +85,31 @@ export function setupChat() {
 // Stop the live listener (on sign-out) so it doesn't keep running / double up.
 export function teardownChat() {
   if (store.chatUnsub) { store.chatUnsub(); store.chatUnsub = null; }
+}
+
+// --- Unread badge (per-device, localStorage) --------------------------------
+const LAST_SEEN_KEY = "chatLastSeenMs";
+const chatBtn = () => document.querySelector('[data-tab="chat"]');
+const chatTabActive = () => { const b = chatBtn(); return !!b && b.classList.contains("active"); };
+function lastSeenMs() {
+  try { return parseInt(localStorage.getItem(LAST_SEEN_KEY) || "0", 10) || 0; }
+  catch (e) { return 0; }
+}
+function setLastSeen(ms) {
+  try { localStorage.setItem(LAST_SEEN_KEY, String(ms)); } catch (e) { /* ignore */ }
+}
+// Show the gold dot on the Chat tab when there are messages newer than what
+// this device last saw, and Chat isn't the open tab.
+function refreshChatBadge() {
+  const b = chatBtn();
+  if (b) b.classList.toggle("attention", store.chatLatestMs > lastSeenMs() && !chatTabActive());
+}
+// Mark the chat as read up to the newest message and drop the dot. Called from
+// the listener (when Chat is the active tab) and from tabs.js when Chat opens.
+function markChatSeen() {
+  setLastSeen(store.chatLatestMs || Date.now());
+  const b = chatBtn();
+  if (b) b.classList.remove("attention");
 }
 
 function renderMessages(list, msgs) {

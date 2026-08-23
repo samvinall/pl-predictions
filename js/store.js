@@ -24,6 +24,8 @@ export const store = {
   showingDenied: false,    // are we showing the "not on the guest list" screen?
   reload: async () => {},  // set to loadEverything() during boot
   chatUnsub: null,         // live chat listener's unsubscribe fn (see chat.js)
+  chatLatestMs: 0,         // time of the newest chat message seen by the listener
+  markChatSeen: null,      // set by chat.js; called by tabs.js when Chat is opened
 
   // Admin "Time Machine": a client-only offset (ms) added to the real clock so
   // the admin can simulate a different "now" and see how the Gameweeks tab

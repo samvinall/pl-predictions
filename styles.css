@@ -301,6 +301,8 @@
     border-radius:10px;
     margin-left:0.4rem;
   }
+  /* "Only pick" marker in the weekly results — shows the potential unique double. */
+  .unique-tag{ font-size:0.8rem; cursor:default; }
   .pick-tile{
     display:flex;
     align-items:center;
