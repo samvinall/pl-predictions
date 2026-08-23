@@ -30,10 +30,11 @@ TEAM_NAMES = {
 }
 
 
-def fixture(event, home, away, hs=None, aws=None, finished=False):
+def fixture(event, home, away, hs=None, aws=None, finished=False, provisional=False):
     return {
         "event": event, "team_h": home, "team_a": away,
-        "team_h_score": hs, "team_a_score": aws, "finished": finished,
+        "team_h_score": hs, "team_a_score": aws,
+        "finished": finished, "finished_provisional": provisional,
     }
 
 
@@ -100,6 +101,27 @@ class BuildResults(unittest.TestCase):
         self.assertEqual(results, [])            # nothing scored yet
         self.assertTrue(pending.get(3))          # flagged pending
         self.assertEqual(scheduled[3], {"Arsenal", "Chelsea"})  # still scheduled
+
+    def test_provisionally_finished_is_scored(self):
+        # Full-time but bonus points not yet confirmed: FPL has
+        # finished=False, finished_provisional=True with the final score. We
+        # should still score it (and NOT flag the gameweek pending).
+        results, _, pending = pr.build_results(
+            TEAM_NAMES, [fixture(1, 1, 2, hs=3, aws=0, finished=False, provisional=True)]
+        )
+        arsenal = find(results, "Arsenal", 1)
+        self.assertEqual(arsenal["results"], ["win"])
+        self.assertEqual(arsenal["goals"], [3])
+        self.assertEqual(arsenal["conceded"], [0])
+        self.assertFalse(pending.get(1))
+
+    def test_started_without_score_is_pending(self):
+        # Provisional flag set but no score recorded yet -> pending, unscored.
+        results, _, pending = pr.build_results(
+            TEAM_NAMES, [fixture(5, 1, 2, hs=None, aws=None, provisional=True)]
+        )
+        self.assertEqual(results, [])
+        self.assertTrue(pending.get(5))
 
     def test_double_gameweek_accumulates(self):
         # Arsenal plays twice in GW4: beats Chelsea 2-1 (home), wins 3-0 at Liverpool.

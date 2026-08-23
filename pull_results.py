@@ -186,11 +186,16 @@ def build_results(team_id_to_name, fixtures):
         if away_name:
             gw_scheduled_teams[gw].add(away_name)
 
-        if not fx.get("finished"):
+        # A fixture counts as played once it's finished OR provisionally
+        # finished. FPL flips `finished` only after bonus points are confirmed
+        # (hours after full-time); `finished_provisional` is set at the whistle
+        # with the final scoreline -- which is all we need for W/D/L + goals,
+        # and a later run overwrites it once `finished` is set anyway.
+        home_score, away_score = fx.get("team_h_score"), fx.get("team_a_score")
+        if (not (fx.get("finished") or fx.get("finished_provisional"))
+                or home_score is None or away_score is None):
             gw_still_pending[gw] = True
-            continue  # not played yet -- handled on a future run
-
-        home_score, away_score = fx["team_h_score"], fx["team_a_score"]
+            continue  # not played yet (or no score yet) -- handled on a future run
         if home_score > away_score:
             home_result, away_result = "win", "loss"
         elif home_score < away_score:
