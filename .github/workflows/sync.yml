@@ -27,7 +27,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests firebase-admin
+        run: pip install requests firebase-admin "google-cloud-firestore==2.28.1"  # pin: 2.29.0 sends an invalid "(default)" db id (400)
 
       - name: Write Firebase service account key
         env:
