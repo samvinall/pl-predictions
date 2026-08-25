@@ -32,6 +32,21 @@ class TestChooseRecipients(unittest.TestCase):
         self.assertEqual(got, ["b@x.com"])
 
 
+class TestSeasonRecipients(unittest.TestCase):
+    def test_only_allowlisted_who_havent_predicted(self):
+        allow = ["A@x.com", "b@x.com", "c@x.com"]
+        picked = ["b@x.com", "stranger@x.com"]   # stranger not allow-listed
+        # a + c haven't predicted; b has; stranger ignored (not allow-listed)
+        self.assertEqual(sr.season_recipients(allow, picked), ["a@x.com", "c@x.com"])
+
+    def test_case_insensitive(self):
+        self.assertEqual(sr.season_recipients(["B@x.com"], ["b@X.com"]), [])
+
+    def test_nobody_predicted_returns_all(self):
+        self.assertEqual(sr.season_recipients(["a@x.com", "b@x.com"], []),
+                         ["a@x.com", "b@x.com"])
+
+
 class TestDueForReminder(unittest.TestCase):
     def setUp(self):
         self.now = datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc)

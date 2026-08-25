@@ -436,6 +436,22 @@
   }
   .link-btn:hover{ background:none; }
 
+  /* Season predictions picker — two clearly separated predictions. */
+  .season-sections{ display:grid; gap:1rem; margin-top:0.8rem; }
+  @media (min-width:640px){ .season-sections{ grid-template-columns:1fr 1fr; align-items:start; } }
+  .season-section{
+    border:1px solid var(--line); border-left:3px solid var(--gold);
+    border-radius:8px; padding:0.8rem 0.9rem; background:var(--paper-2);
+  }
+  .season-section-head{ margin-bottom:0.6rem; }
+  .season-section-title{ font-family:'Bebas Neue', sans-serif; font-size:1.15rem; letter-spacing:0.02em; display:block; }
+  .season-section-sub{
+    display:block; font-family:'JetBrains Mono', monospace; font-size:0.62rem;
+    text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-top:0.1rem;
+  }
+  .season-fields{ display:flex; flex-wrap:wrap; gap:0.6rem; align-items:end; }
+  .season-fields select{ width:100%; }
+
   /* ---- rules ---- */
   .rules-list{ margin:0.4rem 0 0; padding-left:1.1rem; }
   .rules-list li{ margin:0.4rem 0; font-size:0.9rem; }

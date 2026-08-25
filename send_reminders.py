@@ -62,6 +62,14 @@ def due_for_reminder(deadline, now, sent_gws, gw, within=REMIND_WITHIN):
     return timedelta(0) < remaining <= within
 
 
+def season_recipients(allow, picked):
+    """Allow-listed players who haven't set a season prediction yet.
+    Returns a sorted, lower-cased list."""
+    allow = {e.lower() for e in allow if e}
+    picked = {e.lower() for e in picked if e}
+    return sorted(allow - picked)
+
+
 def build_message(gw, deadline, hours_left, site_url):
     """The reminder's subject + plain-text body."""
     subject = f"⚽ Prem Picks — GW{gw} locks in ~{hours_left}h"
@@ -141,6 +149,12 @@ def main():
         return
 
     db = get_db()
+    send_season(db, cfg, site_url)
+    send_weekly(db, cfg, site_url)
+
+
+def send_weekly(db, cfg, site_url):
+    """The ~24h-before-a-gameweek-deadline reminder (see choose_recipients)."""
     current = _doc(db, "current")
     schedule = _doc(db, "schedule")
     if not current or not schedule:
@@ -185,6 +199,52 @@ def main():
     if sent_ok:
         db.collection("config").document("reminders").set(
             {"sent": sorted(sent | {gw})}, merge=True)
+
+
+def send_season(db, cfg, site_url):
+    """One-time nudge ~24h before the season-predictions deadline
+    (config/season.predictionsDeadline), to allow-listed players who haven't
+    set a Golden Boot or champion yet. De-duped via config/reminders.seasonSent
+    so the 2-hourly schedule sends it once."""
+    deadline = _doc(db, "season").get("predictionsDeadline")
+    if deadline is None:
+        return   # no season deadline configured
+
+    now = datetime.now(timezone.utc)
+    remaining = deadline - now
+    if not (timedelta(0) < remaining <= REMIND_WITHIN):
+        return
+    if _doc(db, "reminders").get("seasonSent"):
+        return   # already sent
+
+    allow = _doc(db, "allowlist").get("emails", [])
+    picked = set()
+    for d in db.collection("season_picks").stream():
+        sp = d.to_dict()
+        if sp.get("goldenBootId") is not None or sp.get("champion"):
+            e = (sp.get("email") or "").lower()
+            if e:
+                picked.add(e)
+
+    recipients = season_recipients(allow, picked)
+    if not recipients:
+        print("Season reminder: everyone allow-listed has predicted — nothing to send.")
+        return
+
+    hours_left = int(remaining.total_seconds() // 3600)
+    subject = f"⚽ Prem Picks — season predictions lock in ~{hours_left}h"
+    body = (
+        "You haven't set your season predictions yet — the Golden Boot (top "
+        f"scorer) and champion — and they lock in about {hours_left} hours "
+        f"({deadline.strftime('%a %d %b %Y, %H:%M UTC')}).\n\n"
+        f"Set them on the Season tab:\n{site_url}\n\n"
+        "— Prem Picks\n"
+        "(You're getting this because you're in the league. Reply to opt out.)"
+    )
+    n = send_emails(cfg, recipients, subject, body)
+    print(f"✅ Sent {n}/{len(recipients)} season-prediction reminders.")
+    if n:
+        db.collection("config").document("reminders").set({"seasonSent": True}, merge=True)
 
 
 if __name__ == "__main__":
