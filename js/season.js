@@ -66,24 +66,42 @@ function pickerHtml(my, players, deadline) {
   const champ = my?.champion || "";
   const teams = [...new Set(players.map(p => p.team))].sort();
   const inputStyle = "padding:0.5rem; font-family:'JetBrains Mono',monospace;";
-  html += `<div style="display:flex; flex-wrap:wrap; gap:0.8rem; align-items:end; margin-top:0.6rem;">`
-    // Golden Boot: pick a team first, then a player from that team.
-    + `<div><label class="eyebrow" for="gb-team">Golden Boot — team (${GOLDEN_BOOT_BONUS} pts, ${GOLDEN_BOOT_BONUS * BONUS_MULTIPLIER} if unique)</label><br/>`
+  const gbUnique = GOLDEN_BOOT_BONUS * BONUS_MULTIPLIER;
+  const chUnique = CHAMPION_BONUS * BONUS_MULTIPLIER;
+
+  // Two clearly separated predictions: the Golden Boot (a team then a player)
+  // and, separately, the Champion. Each is its own bordered section so it's
+  // obvious the first two dropdowns are ONE pick and the third is another.
+  html += `<div class="season-sections">`
+    // --- Prediction 1: Golden Boot (top scorer) ---
+    + `<div class="season-section">`
+    + `<div class="season-section-head"><span class="season-section-title">🥇 Golden Boot</span>`
+    + `<span class="season-section-sub">the season's top scorer · ${GOLDEN_BOOT_BONUS} pts (${gbUnique} if unique)</span></div>`
+    + `<div class="season-fields">`
+    + `<div><label class="eyebrow" for="gb-team">1. Team</label><br/>`
     + `<select id="gb-team" style="${inputStyle}">`
-    + `<option value="">— team —</option>`
+    + `<option value="">— pick a team —</option>`
     + teams.map(t => `<option value="${escapeAttr(t)}"${t === myTeam ? " selected" : ""}>${t}</option>`).join("")
     + `</select></div>`
-    + `<div><label class="eyebrow" for="gb-player">Player</label><br/>`
+    + `<div><label class="eyebrow" for="gb-player">2. Player</label><br/>`
     + `<select id="gb-player" style="${inputStyle} min-width:12rem;"${myTeam ? "" : " disabled"}>`
     + playerOptions(players, myTeam, my ? my.goldenBootId : null)
     + `</select></div>`
-    + `<div><label class="eyebrow" for="champ-input">Champion (${CHAMPION_BONUS} pts, ${CHAMPION_BONUS * BONUS_MULTIPLIER} if unique)</label><br/>`
-    + `<select id="champ-input" style="${inputStyle}">`
+    + `</div></div>`
+    // --- Prediction 2: Champion (league winner) ---
+    + `<div class="season-section">`
+    + `<div class="season-section-head"><span class="season-section-title">🏆 Champion</span>`
+    + `<span class="season-section-sub">who lifts the title · ${CHAMPION_BONUS} pts (${chUnique} if unique)</span></div>`
+    + `<div class="season-fields">`
+    + `<div><label class="eyebrow" for="champ-input">Team</label><br/>`
+    + `<select id="champ-input" style="${inputStyle} min-width:12rem;">`
     + `<option value="">— none —</option>`
     + TEAMS.map(t => `<option value="${t}"${t === champ ? " selected" : ""}>${t}</option>`).join("")
     + `</select></div>`
-    + `<button id="season-save">Save predictions</button>`
-    + `</div><div class="msg" id="season-msg"></div>`;
+    + `</div></div>`
+    + `</div>`
+    + `<div style="margin-top:1rem;"><button id="season-save">Save predictions</button></div>`
+    + `<div class="msg" id="season-msg"></div>`;
   return html;
 }
 
