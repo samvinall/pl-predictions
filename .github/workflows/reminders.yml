@@ -12,6 +12,11 @@ on:
         description: "Test only: send one sample email to this address (leave blank for a normal run)"
         required: false
         default: ""
+      probe:
+        description: "Probe only: connect + log in to SMTP and quit, sending NO email (checks credentials)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   remind:
@@ -42,4 +47,5 @@ jobs:
           FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
           FROM_NAME: ${{ secrets.FROM_NAME }}
           TEST_TO: ${{ inputs.test_to }}
+          PROBE: ${{ inputs.probe }}
         run: python send_reminders.py
