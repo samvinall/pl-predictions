@@ -78,5 +78,74 @@ class TestBuildMessage(unittest.TestCase):
         self.assertIn("22 hours", body)
 
 
+class _FakeSMTP:
+    """Stand-in for smtplib.SMTP so connect_smtp() can be tested offline.
+    Class-level knobs control how login behaves; `login_modes` records the AUTH
+    mechanisms advertised at each login attempt."""
+    fail_default = False     # drop the connection on login unless AUTH is forced to LOGIN
+    reject = False           # raise a 535 (bad credentials) on every login
+    login_modes = []
+
+    def __init__(self, host, port, timeout=None):
+        self.esmtp_features = {}
+
+    def ehlo(self):
+        self.esmtp_features = {"auth": "PLAIN LOGIN"}   # (re)set by every EHLO, like the real thing
+        return (250, b"")
+
+    def starttls(self):
+        return (220, b"")
+
+    def login(self, user, password):
+        mode = self.esmtp_features.get("auth")
+        _FakeSMTP.login_modes.append(mode)
+        if _FakeSMTP.reject:
+            raise sr.smtplib.SMTPAuthenticationError(535, b"bad credentials")
+        if _FakeSMTP.fail_default and mode != "LOGIN":
+            raise sr.smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+
+    def close(self):
+        pass
+
+
+class TestConnectSmtp(unittest.TestCase):
+    CFG = ("smtp.example.test", 587, "u", "p", "u@example.test", "Prem Picks")
+
+    def setUp(self):
+        self._orig = sr.smtplib.SMTP
+        sr.smtplib.SMTP = _FakeSMTP
+        _FakeSMTP.fail_default = False
+        _FakeSMTP.reject = False
+        _FakeSMTP.login_modes = []
+
+    def tearDown(self):
+        sr.smtplib.SMTP = self._orig
+
+    def test_normal_login_single_attempt(self):
+        sr.connect_smtp(self.CFG)
+        self.assertEqual(_FakeSMTP.login_modes, ["PLAIN LOGIN"])
+
+    def test_disconnect_during_auth_retries_once_with_login(self):
+        _FakeSMTP.fail_default = True
+        sr.connect_smtp(self.CFG)   # succeeds on the forced-LOGIN retry
+        self.assertEqual(_FakeSMTP.login_modes, ["PLAIN LOGIN", "LOGIN"])
+
+    def test_rejected_credentials_are_not_retried(self):
+        # A 535 must NOT trigger a second login (repeating bad creds risks lockout).
+        _FakeSMTP.reject = True
+        with self.assertRaises(sr.smtplib.SMTPAuthenticationError):
+            sr.connect_smtp(self.CFG)
+        self.assertEqual(len(_FakeSMTP.login_modes), 1)
+
+
+class TestProviderOf(unittest.TestCase):
+    def test_labels(self):
+        self.assertEqual(sr.provider_of("smtp.gmail.com"), "gmail")
+        self.assertEqual(sr.provider_of("smtp-mail.outlook.com"), "outlook")
+        self.assertEqual(sr.provider_of("smtp.office365.com"), "outlook")
+        self.assertEqual(sr.provider_of("smtp-relay.brevo.com"), "other")
+        self.assertEqual(sr.provider_of(None), "other")
+
+
 if __name__ == "__main__":
     unittest.main()

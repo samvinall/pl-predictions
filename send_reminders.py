@@ -91,15 +91,90 @@ def _doc(db, name):
     return db.collection("config").document(name).get().to_dict() or {}
 
 
+def provider_of(host):
+    """A coarse, non-identifying label for the SMTP provider, used only to pick a
+    useful hint in the logs (this repo's Actions logs are public, so we never
+    print the host/user themselves)."""
+    h = (host or "").lower()
+    if "gmail" in h or "google" in h:
+        return "gmail"
+    if any(k in h for k in ("outlook", "office365", "hotmail", "live.com")):
+        return "outlook"
+    return "other"
+
+
+_HINTS = {
+    "gmail": ("Gmail only accepts a 16-character *App Password* (account needs 2-Step "
+              "Verification), not your normal password. Create one at "
+              "myaccount.google.com/apppasswords and store it in SMTP_PASS, with "
+              "SMTP_USER set to the full address and SMTP_HOST=smtp.gmail.com, "
+              "SMTP_PORT=587."),
+    "outlook": ("Outlook/Hotmail personal accounts increasingly refuse basic-auth SMTP "
+                "logins (they want OAuth) and may drop the connection at AUTH. Switch "
+                "to a Gmail app password, or a transactional SMTP relay (Brevo/Resend)."),
+    "other": ("Check SMTP_HOST/PORT/USER/PASS match your provider's SMTP settings, that "
+              "the password is an SMTP/app password, and that the provider doesn't "
+              "block GitHub's (Azure) runner IPs."),
+}
+
+
+def _open_smtp(host, port, user, password, force_auth_login=False):
+    """Connect, STARTTLS and authenticate; return the logged-in server.
+    If `force_auth_login`, advertise only AUTH LOGIN so smtplib skips AUTH PLAIN's
+    initial-response form (some servers drop the connection on that)."""
+    server = smtplib.SMTP(host, port, timeout=30)
+    try:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        mechs = server.esmtp_features.get("auth", "")
+        print(f"SMTP: TLS up; server offers AUTH [{mechs or 'none'}]"
+              f"{' — forcing LOGIN' if force_auth_login else ''}")
+        if force_auth_login and mechs:
+            server.esmtp_features["auth"] = "LOGIN"
+        server.login(user, password)
+        return server
+    except Exception:
+        try:
+            server.close()
+        except Exception:
+            pass
+        raise
+
+
+def connect_smtp(cfg):
+    """Open an authenticated SMTP session, with diagnostics and one careful retry.
+
+    * A *dropped connection* during AUTH (SMTPServerDisconnected) is retried once
+      using AUTH LOGIN -- smtplib never falls back on a disconnect by itself.
+    * A *rejected login* (535/534) is NOT retried: repeating bad credentials
+      risks the provider locking the account.
+    Failures print a provider-specific hint, then re-raise so the job is red."""
+    host, port, user, password = cfg[0], cfg[1], cfg[2], cfg[3]
+    provider = provider_of(host)
+    print(f"SMTP: provider looks like '{provider}', port {port}")
+    try:
+        return _open_smtp(host, port, user, password)
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"✗ SMTP login rejected ({e.smtp_code}). {_HINTS[provider]}")
+        raise
+    except smtplib.SMTPServerDisconnected:
+        print("⚠️  Server closed the connection during AUTH; retrying once with AUTH LOGIN…")
+        try:
+            return _open_smtp(host, port, user, password, force_auth_login=True)
+        except (smtplib.SMTPServerDisconnected, smtplib.SMTPAuthenticationError) as e:
+            print(f"✗ Still can't authenticate ({type(e).__name__}). {_HINTS[provider]}")
+            raise
+
+
 def send_emails(cfg, recipients, subject, body):
     """Send one message to each recipient over SMTP. `cfg` is
     (host, port, user, password, from_email, from_name). Returns how many
     were sent OK; a single bad address doesn't stop the rest."""
-    host, port, user, password, from_email, from_name = cfg
+    _, _, _, _, from_email, from_name = cfg
     sent_ok = 0
-    with smtplib.SMTP(host, port) as server:
-        server.starttls()
-        server.login(user, password)
+    server = connect_smtp(cfg)
+    try:
         for to in recipients:
             msg = EmailMessage()
             msg["Subject"] = subject
@@ -111,6 +186,11 @@ def send_emails(cfg, recipients, subject, body):
                 sent_ok += 1
             except Exception as e:
                 print(f"  ✗ {to}: {e}")
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
     return sent_ok
 
 
@@ -125,11 +205,23 @@ def main():
         print("ℹ️  SMTP not configured (SMTP_HOST / SMTP_USER / SMTP_PASS) — "
               "skipping reminders.")
         return
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    from_email = os.environ.get("FROM_EMAIL", user)
-    from_name = os.environ.get("FROM_NAME", "Prem Picks")
-    site_url = os.environ.get("SITE_URL", DEFAULT_SITE_URL)
+    # Use `or` (not a get() default): the workflow passes every secret as an env
+    # var, and a secret that doesn't exist arrives as an EMPTY STRING -- which
+    # get(..., default) would keep, producing e.g. a blank "From: Prem Picks <>".
+    port = int(os.environ.get("SMTP_PORT") or "587")
+    from_email = os.environ.get("FROM_EMAIL") or user
+    from_name = os.environ.get("FROM_NAME") or "Prem Picks"
+    site_url = os.environ.get("SITE_URL") or DEFAULT_SITE_URL
     cfg = (host, port, user, password, from_email, from_name)
+
+    # PROBE MODE: connect + log in, then quit WITHOUT sending anything. Set via
+    # the workflow's `probe` input (PROBE=true). Safe way to check the SMTP
+    # credentials/connection (and see the diagnostics) with no email going out.
+    if os.environ.get("PROBE", "").strip().lower() == "true":
+        server = connect_smtp(cfg)
+        server.quit()
+        print("✅ Probe: SMTP login succeeded (no email was sent).")
+        return
 
     # TEST MODE: send a single sample email to one address and stop. Set via the
     # workflow's `test_to` input (TEST_TO env). Bypasses the deadline window,
