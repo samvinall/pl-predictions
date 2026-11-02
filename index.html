@@ -52,6 +52,7 @@
       <button class="tab-btn" data-tab="pick" role="tab">Gameweeks</button>
       <button class="tab-btn" data-tab="season" id="tab-btn-season" role="tab">Season</button>
       <button class="tab-btn" data-tab="table" role="tab">Table</button>
+      <button class="tab-btn" data-tab="results" role="tab">Results</button>
       <button class="tab-btn" data-tab="chat" role="tab">Chat</button>
       <button class="tab-btn" data-tab="settings" role="tab">Settings</button>
       <button class="tab-btn" data-tab="rules" role="tab">Rules</button>
@@ -150,6 +151,25 @@
               <tr><th></th><th>Player</th><th>Pld</th><th>Won</th><th>Form</th><th>PPW</th><th title="Chips played">Chips</th><th title="Points earned from chips (Double Down, Double Chance, Goalfest, Scorecard, Multipick)">Chip pts</th><th title="Points earned from the unique-pick bonus">Bonus pts</th><th>Pts</th></tr>
             </thead>
             <tbody id="leaderboard-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESULTS (any player's pick history) -->
+    <section id="tab-results" class="tab-panel" role="tabpanel">
+      <div class="card" id="history-card">
+        <h2>Results History</h2>
+        <p class="eyebrow">Every revealed pick, week by week. Choose one or more players, or leave on Everyone.</p>
+        <div class="table-filter" id="history-players"></div>
+        <div class="history-totals" id="history-totals"></div>
+        <p class="empty" id="history-note" style="display:none;"></p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>GW</th><th>Player</th><th>Pick</th><th>Result</th><th>Pts</th></tr>
+            </thead>
+            <tbody id="history-body"></tbody>
           </table>
         </div>
       </div>

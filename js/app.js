@@ -13,7 +13,7 @@ import { store, nowDate } from "./store.js";
 import { multipickOutcomes, pickTeams } from "./scoring.js";
 import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist, loadPaidList, setupTimeMachine } from "./admin.js";
 import {
-  startDeadlineCountdown, renderWeek, currentGameweek,
+  startDeadlineCountdown, renderWeek, renderHistory, currentGameweek,
   renderLeaderboard, computeWeeklyTotals, computeSeasonPoints,
   renderProfile, renderRules,
 } from "./render.js";
@@ -289,6 +289,7 @@ async function loadEverything() {
 
   renderProfile();
   renderWeek();
+  renderHistory();
   renderSeason({ open: seasonOpenSim, deadline: seasonDeadline, results: seasonResults, standings, players, seasonPicks, myPick: mySeasonPick, finalTable });
   renderLeaderboard(allPicks, results, goalsByKey, concededByKey, popularity);
 }

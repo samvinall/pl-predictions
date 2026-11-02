@@ -366,6 +366,49 @@ function renderPickActions(gw, dirty) {
 // The results table for the selected week. Locked weeks reveal everyone's
 // picks + how they scored (the reveal "sheet" and the old history rolled into
 // one); open weeks keep picks hidden.
+// One pick -> everything needed to show it in a results table: who, what they
+// backed, how it went, and the points it scored. Shared by the per-week table
+// (Gameweeks tab) and the player-history table (Results tab) so they can never
+// disagree.
+function buildResultRow(p) {
+  const results = store.results, goalsByKey = store.goalsByKey, concededByKey = store.concededByKey, popularity = store.popularity;
+  const key = `${p.gameweek}_${p.team}`;
+  const isMulti = p.chip === "multipick";
+  const outcomes = isMulti
+    ? multipickOutcomes(p.gameweek, p.team, p.team2, results)
+    : (results[key] || []);
+  const { pts, bonus, scorecardHit } = isMulti
+    ? scoreMultipick(p.gameweek, p.team, p.team2, results, popularity)
+    : scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
+  const teams = pickTeams(p);
+  const label = isMulti
+    ? teams
+        .map(t => `${t}: ${fmtResult(results[`${p.gameweek}_${t}`], goalsByKey[`${p.gameweek}_${t}`], concededByKey[`${p.gameweek}_${t}`])}`)
+        .join(" · ")
+    : fmtResult(outcomes, goalsByKey[key], concededByKey[key]);
+  // Is any team solo (nobody else on it)? Shown as a "potential double" marker
+  // even before the result is in. For a Multipick the double only applies if a
+  // WINNING team is the solo one (see scoreMultipick).
+  const unique = teams.some(t => (popularity[`${p.gameweek}_${t}`] || 0) <= UNIQUE_THRESHOLD);
+  return {
+    gw: p.gameweek, uid: p.uid, email: p.email, name: store.names[p.uid] || p.name,
+    team: teams.join(" + "), chip: p.chip, scorecard: p.scorecard,
+    label, pts, bonus, scorecardHit, unique,
+    played: outcomes.some(o => o === "win" || o === "draw" || o === "loss"),
+    won: outcomes.includes("win"),
+  };
+}
+
+// The <td>s shared by both results tables: Team (+chip +💎), Result, Pts (+bonus).
+function resultCellsHtml(r) {
+  const uniqueTag = r.unique ? ` <span class="unique-tag" title="Sole backer of a team — points double if that team wins">💎</span>` : "";
+  const bonusTag = r.bonus ? `<span class="bonus-tag">&times;${BONUS_MULTIPLIER}</span>` : "";
+  const hitTag = r.scorecardHit ? `<span class="bonus-tag" title="Exact score!">🎯+${SCORECARD_BONUS}</span>` : "";
+  return `<td>${r.team}${chipTag(r.chip, r.scorecard)}${uniqueTag}</td><td>${r.label}</td>`
+    + `<td><strong>${r.pts}</strong>${bonusTag}${hitTag}</td>`;
+}
+const isMeRow = r => (store.currentUser && r.email === store.currentUser.email ? ' class="me"' : "");
+
 function renderWeekResults(gw, open) {
   const title = document.getElementById("week-results-title");
   const note = document.getElementById("week-results-note");
@@ -384,34 +427,9 @@ function renderWeekResults(gw, open) {
     return;
   }
 
-  const results = store.results, goalsByKey = store.goalsByKey, concededByKey = store.concededByKey, popularity = store.popularity;
   const rows = store.allPicks
     .filter(p => p.gameweek === gw)
-    .map(p => {
-      const key = `${p.gameweek}_${p.team}`;
-      const isMulti = p.chip === "multipick";
-      const outcomes = isMulti
-        ? multipickOutcomes(p.gameweek, p.team, p.team2, results)
-        : (results[key] || []);
-      const { pts, bonus, scorecardHit } = isMulti
-        ? scoreMultipick(p.gameweek, p.team, p.team2, results, popularity)
-        : scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
-      let label;
-      const teams = pickTeams(p);
-      if (isMulti) {
-        label = teams
-          .map(t => `${t}: ${fmtResult(results[`${p.gameweek}_${t}`], goalsByKey[`${p.gameweek}_${t}`], concededByKey[`${p.gameweek}_${t}`])}`)
-          .join(" · ");
-      } else {
-        label = fmtResult(outcomes, goalsByKey[key], concededByKey[key]);
-      }
-      const team = teams.join(" + ");
-      // Is this a solo pick (nobody else on that team)? Shown as a "potential
-      // double" marker even before the result is in. For a Multipick, unique if
-      // either team is solo (mirrors scoreMultipick's isUnique).
-      const unique = teams.some(t => (popularity[`${p.gameweek}_${t}`] || 0) <= UNIQUE_THRESHOLD);
-      return { name: store.names[p.uid] || p.name, email: p.email, team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit, unique };
-    })
+    .map(buildResultRow)
     .sort((a, b) => b.pts - a.pts);
 
   if (rows.length === 0) {
@@ -424,13 +442,90 @@ function renderWeekResults(gw, open) {
 
   note.style.display = "none";
   table.style.display = "";
-  body.innerHTML = rows.map(r => {
-    const cls = store.currentUser && r.email === store.currentUser.email ? ' class="me"' : "";
-    const uniqueTag = r.unique ? ` <span class="unique-tag" title="Only pick — points double if they win">💎</span>` : "";
-    const bonusTag = r.bonus ? `<span class="bonus-tag">&times;${BONUS_MULTIPLIER}</span>` : "";
-    const hitTag = r.scorecardHit ? `<span class="bonus-tag" title="Exact score!">🎯+${SCORECARD_BONUS}</span>` : "";
-    return `<tr${cls}><td>${r.name}</td><td>${r.team}${chipTag(r.chip, r.scorecard)}${uniqueTag}</td><td>${r.label}</td><td><strong>${r.pts}</strong>${bonusTag}${hitTag}</td></tr>`;
-  }).join("");
+  body.innerHTML = rows
+    .map(r => `<tr${isMeRow(r)}><td>${r.name}</td>${resultCellsHtml(r)}</tr>`)
+    .join("");
+}
+
+// ---------------------------------------------------------------------------
+// "Results" tab: any player's (or everyone's) pick history, week by week
+// ---------------------------------------------------------------------------
+
+// Players in the filter: everyone with at least one revealed (locked-week) pick,
+// keyed by email. Sorted by display name.
+function historyPlayers() {
+  const byEmail = new Map();
+  store.allPicks.forEach(p => {
+    if (isWeekOpen(p.gameweek)) return;           // only revealed weeks
+    const key = (p.email || "").toLowerCase();
+    if (key && !byEmail.has(key)) byEmail.set(key, store.names[p.uid] || p.name || key);
+  });
+  return [...byEmail.entries()]
+    .map(([email, name]) => ({ email, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Filter chips + the history table. No selection = everyone. Re-renders purely
+// from the datasets cached on `store` (no Firestore read).
+export function renderHistory() {
+  const chipsEl = document.getElementById("history-players");
+  const bodyEl = document.getElementById("history-body");
+  const totalsEl = document.getElementById("history-totals");
+  const noteEl = document.getElementById("history-note");
+  if (!chipsEl || !bodyEl) return;
+
+  const players = historyPlayers();
+  // Drop any selected players who no longer exist (e.g. after removal from the list).
+  const known = new Set(players.map(p => p.email));
+  store.historyPlayers = new Set([...(store.historyPlayers || [])].filter(e => known.has(e)));
+  const sel = store.historyPlayers;
+
+  chipsEl.innerHTML =
+    `<button class="filter-btn${sel.size === 0 ? " selected" : ""}" data-all="1">Everyone</button>`
+    + players.map(p => `<button class="filter-btn${sel.has(p.email) ? " selected" : ""}" data-email="${p.email.replace(/"/g, "&quot;")}">${p.name}</button>`).join("");
+  chipsEl.onclick = (ev) => {
+    const btn = ev.target.closest("button");
+    if (!btn) return;
+    if (btn.dataset.all) sel.clear();
+    else if (sel.has(btn.dataset.email)) sel.delete(btn.dataset.email);
+    else sel.add(btn.dataset.email);
+    renderHistory();
+  };
+
+  const rows = store.allPicks
+    .filter(p => !isWeekOpen(p.gameweek))
+    .filter(p => sel.size === 0 || sel.has((p.email || "").toLowerCase()))
+    .map(buildResultRow)
+    .sort((a, b) => b.gw - a.gw || b.pts - a.pts || a.name.localeCompare(b.name));
+
+  if (rows.length === 0) {
+    bodyEl.innerHTML = "";
+    totalsEl.innerHTML = "";
+    noteEl.style.display = "";
+    noteEl.textContent = "No picks to show yet — picks appear here once their gameweek locks.";
+    return;
+  }
+  noteEl.style.display = "none";
+
+  // Per-player totals for whoever is on screen.
+  const tot = new Map();
+  rows.forEach(r => {
+    const t = tot.get(r.email) || { name: r.name, pts: 0, weeks: 0, wins: 0 };
+    t.pts += r.pts; if (r.played) t.weeks++; if (r.won) t.wins++;
+    tot.set(r.email, t);
+  });
+  totalsEl.innerHTML = [...tot.values()]
+    .sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name))
+    .map(t => `<span class="history-total"><strong>${t.name}</strong> ${t.pts} pt${t.pts === 1 ? "" : "s"} · ${t.wins} win${t.wins === 1 ? "" : "s"} / ${t.weeks} played</span>`)
+    .join("");
+
+  // One heading row per gameweek (newest first), then that week's picks.
+  let html = "", lastGw = null;
+  rows.forEach(r => {
+    if (r.gw !== lastGw) { html += `<tr class="gw-row"><td colspan="5">Gameweek ${r.gw}</td></tr>`; lastGw = r.gw; }
+    html += `<tr${isMeRow(r)}><td>${r.gw}</td><td>${r.name}</td>${resultCellsHtml(r)}</tr>`;
+  });
+  bodyEl.innerHTML = html;
 }
 
 // Fixtures for the selected week, mirrored into config/schedule by
