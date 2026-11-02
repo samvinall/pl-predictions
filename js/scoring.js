@@ -97,6 +97,15 @@ export function scoreMultipick(gameweek, teamA, teamB, results, popularity) {
   };
 }
 
+// The distinct teams a pick backs: two for a Multipick, otherwise one. Always
+// de-duplicated, so a malformed Multipick saved as e.g. Chelsea + Chelsea still
+// counts as ONE team -- otherwise a lone backer would be counted twice towards
+// popularity and wrongly lose the unique-pick bonus.
+export function pickTeams(p) {
+  const ts = p.chip === "multipick" && p.team2 ? [p.team, p.team2] : [p.team];
+  return [...new Set(ts.filter(Boolean))];
+}
+
 // A single representative outcome for a Multipick week (best of the two teams:
 // win > draw > loss > forfeit), used for the "played"/form/label displays.
 // Returns [] if neither team has a result yet.

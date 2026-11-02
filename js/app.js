@@ -10,7 +10,7 @@ import {
 } from "./firebase.js";
 import { ADMIN_EMAIL } from "./config.js";
 import { store, nowDate } from "./store.js";
-import { multipickOutcomes } from "./scoring.js";
+import { multipickOutcomes, pickTeams } from "./scoring.js";
 import { setupAdminPanel, setupAccessPanel, renderAdminRecent, renderAdminNames, setupSeasonAdmin, loadAllowlist, loadPaidList, setupTimeMachine } from "./admin.js";
 import {
   startDeadlineCountdown, renderWeek, currentGameweek,
@@ -177,8 +177,6 @@ async function loadEverything() {
   }
 
   store.myPicks = allPicks.filter(p => p.uid === store.currentUser.uid);
-  // The teams a pick occupies: two for a Multipick, otherwise one.
-  const teamsOf = p => (p.chip === "multipick" && p.team2 ? [p.team, p.team2] : [p.team]);
 
   // Gameweeks where my pick actually played (a real win/draw/loss for at least
   // one of its teams). Used to decide which chips have been "spent" this half
@@ -196,7 +194,7 @@ async function loadEverything() {
   // A Multipick backs both of its teams, so both count toward popularity.
   const popularity = {};
   allPicks.forEach(p => {
-    teamsOf(p).forEach(t => {
+    pickTeams(p).forEach(t => {
       const key = `${p.gameweek}_${t}`;
       popularity[key] = (popularity[key] || 0) + 1;
     });
