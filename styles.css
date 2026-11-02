@@ -252,6 +252,13 @@
   .filter-btn:hover{ background:var(--paper-2); }
   .filter-btn.selected{ background:var(--gold); border-color:var(--gold); color:var(--pitch-dark); font-weight:700; }
   .paid-tag{ font-size:0.8rem; }
+  /* Results tab: per-player totals + a heading row per gameweek */
+  .history-totals{ display:flex; flex-wrap:wrap; gap:0.4rem 1rem; margin:0 0 0.9rem; font-family:'JetBrains Mono', monospace; font-size:0.74rem; color:var(--muted); }
+  .history-total strong{ color:var(--ink); }
+  tr.gw-row td{
+    background:var(--paper-2); font-family:'Bebas Neue', sans-serif; letter-spacing:0.03em;
+    font-size:1rem; color:var(--pitch-dark); padding:0.35rem 0.6rem;
+  }
   /* League chat */
   .chat-list{
     max-height:55vh; overflow-y:auto;
