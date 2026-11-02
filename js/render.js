@@ -11,7 +11,7 @@ import {
 } from "./config.js";
 import { db, doc, setDoc, deleteDoc } from "./firebase.js";
 import { store, nowDate } from "./store.js";
-import { scorePick, scoreMultipick, multipickOutcomes, fmtCountdown, trailingStreak } from "./scoring.js";
+import { scorePick, scoreMultipick, multipickOutcomes, pickTeams, fmtCountdown, trailingStreak } from "./scoring.js";
 
 // Live-ticking countdown to the current gameweek's deadline in the status row.
 // Flips the whole app to its locked state (revealing picks) the moment it
@@ -99,10 +99,9 @@ function fmtDeadline(d) {
 function teamsUsedForWeek(gw) {
   const half = halfOf(gw);
   const used = new Set();
-  const teamsOf = p => (p.chip === "multipick" && p.team2 ? [p.team, p.team2] : [p.team]);
   store.myPicks.forEach(p => {
     if (p.gameweek === gw || halfOf(p.gameweek) !== half) return;
-    teamsOf(p).forEach(t => {
+    pickTeams(p).forEach(t => {
       if (!(store.results[`${p.gameweek}_${t}`] || []).includes("forfeit")) used.add(t);
     });
   });
@@ -202,7 +201,7 @@ function renderPickPanel(gw, open, usedTeams) {
   // "Current selection" box: always what's actually SAVED (never the draft).
   if (curEl) {
     if (saved) {
-      const t = saved.chip === "multipick" && saved.team2 ? `${saved.team} + ${saved.team2}` : saved.team;
+      const t = pickTeams(saved).join(" + ");
       curEl.innerHTML = `<span class="cs-label">Current selection</span><span class="cs-pick"><strong>${t}</strong>${chipTag(saved.chip, saved.scorecard)}</span>`;
     } else {
       curEl.innerHTML = `<span class="cs-label">Current selection</span><span class="cs-pick empty">nothing saved for GW${gw} yet</span>`;
@@ -246,7 +245,13 @@ function renderPickPanel(gw, open, usedTeams) {
     btn.disabled = locked;
     btn.onclick = () => {
       if (d.team === team) { d.team = null; d.chip = null; d.scorecard = null; d.team2 = null; }
-      else d.team = team;
+      else {
+        d.team = team;
+        // The Multipick second team must differ from the main team. If you make
+        // your second team the main one, drop it (the dropdown would otherwise
+        // show blank while a hidden duplicate was still saved).
+        if (d.team2 === team) d.team2 = null;
+      }
       renderWeek();
     };
     grid.appendChild(btn);
@@ -392,18 +397,18 @@ function renderWeekResults(gw, open) {
         ? scoreMultipick(p.gameweek, p.team, p.team2, results, popularity)
         : scorePick(outcomes, goalsByKey[key], concededByKey[key], p.chip, p.scorecard, popularity[key]);
       let label;
+      const teams = pickTeams(p);
       if (isMulti) {
-        label = [p.team, p.team2].filter(Boolean)
+        label = teams
           .map(t => `${t}: ${fmtResult(results[`${p.gameweek}_${t}`], goalsByKey[`${p.gameweek}_${t}`], concededByKey[`${p.gameweek}_${t}`])}`)
           .join(" · ");
       } else {
         label = fmtResult(outcomes, goalsByKey[key], concededByKey[key]);
       }
-      const team = isMulti && p.team2 ? `${p.team} + ${p.team2}` : p.team;
+      const team = teams.join(" + ");
       // Is this a solo pick (nobody else on that team)? Shown as a "potential
       // double" marker even before the result is in. For a Multipick, unique if
       // either team is solo (mirrors scoreMultipick's isUnique).
-      const teams = isMulti ? [p.team, p.team2].filter(Boolean) : [p.team];
       const unique = teams.some(t => (popularity[`${p.gameweek}_${t}`] || 0) <= UNIQUE_THRESHOLD);
       return { name: store.names[p.uid] || p.name, email: p.email, team, chip: p.chip, scorecard: p.scorecard, label, pts, bonus, scorecardHit, unique };
     })
@@ -513,6 +518,11 @@ function savePick(gw) {
       && Number.isInteger(d.scorecard.for) && Number.isInteger(d.scorecard.against)
       && d.scorecard.for >= 0 && d.scorecard.against >= 0)) {
     msg.textContent = "Enter both scores (0 or more) for Scorecard, or choose another chip.";
+    msg.className = "msg error";
+    return;
+  }
+  if (d.chip === "multipick" && d.team2 === d.team) {
+    msg.textContent = "Your Multipick needs two different teams — choose a second team.";
     msg.className = "msg error";
     return;
   }
